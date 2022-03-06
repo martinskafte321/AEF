@@ -22,14 +22,15 @@ library(scales)
 library(slider)
 library(furrr)
 
-setwd('C:/Users/Marti/OneDrive - University of Copenhagen/KU/2. semester/Advanced Empirical Finance/AEF')
+#setwd('C:/Users/Marti/OneDrive - University of Copenhagen/KU/2. semester/Advanced Empirical Finance/AEF')
 ```
 
 ### 1. Read in the monthly CRSP date (crsp_monthly) and the monthly market excess returns (factors_ff_monthly) from the tidy_finance.sqlite database. Very briefly state the definition of the variables permno, ret_excess and mktcap. Provide suitable summary statistics of the cross-section of monthly excess returns and market capitalization in the CRSP sample.
 
 
 
-```{r cars}
+
+```{r}
 # ******************************************
 # 4.1 Data preparation
 # ******************************************
@@ -45,10 +46,6 @@ factors_ff_monthly <- tbl(tidy_finance, "factors_ff_monthly") %>%
   collect() %>%
   mutate(month = as.Date(as.POSIXct.Date(month)))
 
-beta <- tbl(tidy_finance, "beta") %>%
-  collect() %>%
-  mutate(month = as.Date(as.POSIXct.Date(month)))
-
 crsp_monthly <- crsp_monthly %>%
   left_join(factors_ff_monthly, by = "month") %>%
   select(permno, month, ret_excess, mkt_excess, mktcap_lag)
@@ -56,4 +53,4 @@ crsp_monthly
 
 dbListTables(tidy_finance) # check the database
 ```
-
+*Very briefly state the definition of the variables permno, ret_excess and mktcap*. 
