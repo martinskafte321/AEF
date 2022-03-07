@@ -22,6 +22,8 @@ library(lmtest)
 library(scales)
 library(slider)
 library(furrr)
+library(fred)
+
 
 #setwd('C:/Users/Marti/OneDrive - University of Copenhagen/KU/2. semester/Advanced Empirical Finance/AEF')
 ```
@@ -37,7 +39,8 @@ library(furrr)
 # ******************************************
 
 tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite",
-                          extended_types = TRUE)
+                          extended_types = FALSE
+      )
 
 crsp_monthly <- tbl(tidy_finance, "crsp_monthly") %>%
   collect() %>%
@@ -57,7 +60,7 @@ dbListTables(tidy_finance) # check the database
 *Very briefly state the definition of the variables permno, ret_excess and mktcap*. 
 Definition of PERMNO, as per {PERMNO}: "PERMNO is a unique permanent security identification number assigned by CRSP to each security". Thus PERMNO is a unique company identifier. 
 
-Definition of excess returns, as per {exret}: Excess return for a stock is the difference between the stock return and the return on the risk-free security over the same period. For such risk-free securities, it is common to use a government bond such as a 10-year US Treasury bond.\\ 
+Definition of excess fred fred returns, as per {exret}: Excess return for a stock is the difference between the stock return and the return on the risk-free security over the same period. For such risk-free securities, it is common to use a government bond such as a 10-year US Treasury bond.\\ 
 
 Definition of mktcap, as per {mktcap}: The variable 'mktcap' is defined as the market capitalization, which refers to the total dollar market value of a company's outstanding shares of stock. Market capitalization is commonly referred to as "market cap," and is calculated by multiplying the total number of a company's outstanding shares by the current market price of one share.
 
