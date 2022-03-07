@@ -225,16 +225,71 @@ assign_portfolio <- function(data, var, n_portfolios) {
       n_portfolios = 10
     ),
     portfolio = as.factor(portfolio)
-  ) %>%
-  group_by(portfolio, month) %>%
-  summarize(weighted_mom = weighted.mean(momentum, mktcap_lag), .groups = "drop")
+  )
+
+momentum_portfolios%>%
+  head()
+  
+  
+
 ```
-* To help understand the characteristics of the stocks comprising each of the M omi,t sorted portfolios,
-present the equal-weighted average values of M omi,t and mci,t for each of the 10 portfolios.
-* Compute value-weighted monthly excess returns for the decile portfolios. Report the average excess
-return, the CAPM alpha and the market beta for the 10 momentum sorted portfolios. Finally, analyse
-the momentum strategy: a portfolio that goes long past winners (the highest decile) and short past
-losers (the lowest decile). What do you conclude about the performance of the momentum strategy?
+* To help understand the characteristics of the stocks comprising each of the $Mom_{i,t}$ sorted portfolios,
+present the equal-weighted average values of $Mom_{i,t}$ and $mc_{i,t}$ for each of the 10 portfolios.
+
+```{r}
+
+momentum_portfolios %>% 
+  group_by(portfolio) %>%
+  summarise(
+    mom_mean = mean(momentum),
+    mc_mean = mean(mktcap)
+    ) 
+```
+
+* Compute value-weighted monthly excess returns for the decile portfolios.
+* Report the average excess return, the CAPM alpha and the market beta for the 10 momentum sorted portfolios. 
+
+```{r}
+vw_momentum_portfolios = momentum_portfolios %>%
+  group_by(portfolio, month) %>%
+  summarize(excess_ret = weighted.mean(ret_excess, mktcap), .groups = "drop")
+
+
+mom_portfolios_summary <- vw_momentum_portfolios %>%
+  left_join(factors_ff_monthly, by = "month") %>%
+  group_by(portfolio) %>%
+  summarise(
+    alpha = as.numeric(lm(excess_ret ~ 1 + mkt_excess)$coefficients[1]),
+    beta = as.numeric(lm(excess_ret ~ 1 + mkt_excess)$coefficients[2]),
+    excess_ret = mean(excess_ret)
+  )
+mom_portfolios_summary
+```
+
+```{r}
+
+mom_portfolios_summary %>%
+  ggplot(aes(x = portfolio, y = alpha, fill = portfolio)) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Alphas of momentum-sorted portfolios",
+    x = "Portfolio",
+    y = "CAPM alpha",
+    fill = "Portfolio"
+  ) +
+  scale_y_continuous(labels = percent) +
+  theme(legend.position = "None")
+```
+The plot shows that portfolios 1 and 10 has the highest alpha and decreasing going towards the center. Thus alpha is lowest for median momentum stocks. 
+
+
+* Finally, analyse the momentum strategy: a portfolio that goes long past winners (the highest decile) and short past
+losers (the lowest decile). 
+```{r}
+
+```
+
+* What do you conclude about the performance of the momentum strategy?
 Is the strategy market neutral (i.e., does it exhibit a market beta which is zero)? Does the strategy
 deliver abnormal excess returns (i.e., a positive alpha)?
 ```{r}
