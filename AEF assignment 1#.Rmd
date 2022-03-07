@@ -22,7 +22,7 @@ library(lmtest)
 library(scales)
 library(slider)
 library(furrr)
-library(fred)
+
 
 
 #setwd('C:/Users/Marti/OneDrive - University of Copenhagen/KU/2. semester/Advanced Empirical Finance/AEF')
@@ -60,7 +60,7 @@ dbListTables(tidy_finance) # check the database
 *Very briefly state the definition of the variables permno, ret_excess and mktcap*. 
 Definition of PERMNO, as per {PERMNO}: "PERMNO is a unique permanent security identification number assigned by CRSP to each security". Thus PERMNO is a unique company identifier. 
 
-Definition of excess fred fred returns, as per {exret}: Excess return for a stock is the difference between the stock return and the return on the risk-free security over the same period. For such risk-free securities, it is common to use a government bond such as a 10-year US Treasury bond.\\ 
+Definition of excess returns, as per {exret}: Excess return for a stock is the difference between the stock return and the return on the risk-free security over the same period. For such risk-free securities, it is common to use a government bond such as a 10-year US Treasury bond.\\ 
 
 Definition of mktcap, as per {mktcap}: The variable 'mktcap' is defined as the market capitalization, which refers to the total dollar market value of a company's outstanding shares of stock. Market capitalization is commonly referred to as "market cap," and is calculated by multiplying the total number of a company's outstanding shares by the current market price of one share.
 
@@ -106,6 +106,20 @@ ret %>%
   select(-n)
 ```
 Summary statistics for ret_excess and mktcap shows that the mean return per month is 0.79% although the median is -0.0004%. An important distinction between the variables is that ret_excess is in relative numbers, while mktcap of course is absolute, since the return is a relative change and market cap is a true number. 
+
+### 2. 
+
+```{r}
+crsp_monthly %>% group_by(permno) %>%
+mutate(ret_excess_lag = lag(ret_excess))
+
+crsp_monthly %>%
+  group_by(permno)%>%
+  mutate(month = month %m+% months(1))
+
+```
+
+ 
 
 
 ### 3. Generate a new column mktcap_lag_12 which contains the firms’ market capitalization 12-month prior to the measurement date.
@@ -168,4 +182,6 @@ data_for %>%
   
 ```
 Yes, there is a positive correlation coefficient of 0.067 between the momentum value and log of market capitalization. 
+
+
 
