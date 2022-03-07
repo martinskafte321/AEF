@@ -157,9 +157,11 @@ mom_stat = data_for_sorting %>%
   summarise(across(
     momentum,
     list(Mean = mean,SD = sd, min = min,
+         q5 = ~quantile(., 0.05),
          q25 = ~quantile(., 0.25),
          median = median,
          q75 = ~quantile(., 0.75),
+         q95 = ~quantile(., 0.95),
          max = max
          ),
     .names = "{.fn}"))
