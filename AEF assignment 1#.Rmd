@@ -252,7 +252,7 @@ momentum_portfolios %>%
 ```{r}
 vw_momentum_portfolios = momentum_portfolios %>%
   group_by(portfolio, month) %>%
-  summarize(excess_ret = weighted.mean(ret_excess, mktcap), .groups = "drop")
+  summarize(excess_ret = weighted.mean(ret_excess, mktcap), .groups = "drop") # The value weighted return
 
 
 mom_portfolios_summary <- vw_momentum_portfolios %>%
@@ -286,12 +286,23 @@ The plot shows that portfolios 1 and 10 has the highest alpha and decreasing goi
 * Finally, analyse the momentum strategy: a portfolio that goes long past winners (the highest decile) and short past
 losers (the lowest decile). 
 ```{r}
+strategy_portfolio = momentum_portfolios %>% 
+  group_by(month) %>%
+  mutate(breakpoint = median(momentum),
+         portfolio = case_when(momentum <= breakpoint ~ "low",
+                               momentum > breakpoint ~ "high")) %>%
+  group_by(month,portfolio) %>%
+  summarise(excess_ret = weighted.mean(ret_excess, mktcap)) # Value weighted return by high or low grouped momentum values. 
 
+strategy_portfolio %>% 
+  pivot_wider(names_from = portfolio, values_from = excess_ret) %>%
+  mutate(high_low = high - low) %>% 
+  left_join(factors_ff_monthly, by = "month") %>%
+  lm(high_low ~ mkt_excess, data = .) %>% broom::tidy()
 ```
 
 * What do you conclude about the performance of the momentum strategy?
-Is the strategy market neutral (i.e., does it exhibit a market beta which is zero)? Does the strategy
-deliver abnormal excess returns (i.e., a positive alpha)?
-```{r}
+Is the strategy market neutral (i.e., does it exhibit a market beta which is zero)? Does the strategy deliver abnormal excess returns (i.e., a positive alpha)?
 
-```
+The test statistics shows that is it possible to generate (very) small alpha by having a short position in low momentum stocks and a long position in high momentum stocks. The alpha of this regression is 0,012%, which may be considered as insignificant. The insignificant alpha can be implied by the graph above, which shows that alpha is highest within the lowest- and highest momentum portfolios. A strategy in this case would be to go long these portfolios and short the rest.
+The strategy is not market neutral as the beta is -0.1. 
