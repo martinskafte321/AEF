@@ -100,7 +100,7 @@ mkt = crsp_monthly %>%
 
 ret %>% 
   cbind(mkt) %>%
-  select(-n)  
+  select(-n)
 ```
 Summary statistics for ret_excess and mktcap shows that the mean return per month is 0.79% although the median is -0.0004%. An important distinction between the variables is that ret_excess is in relative numbers, while mktcap of course is absolute, since the return is a relative change and market cap is a true number. 
 
@@ -128,7 +128,7 @@ data_for <-  data_for %>%
   mutate(momentum =  100*(mktcap_lag-mktcap_lag_12)/mktcap_lag_12)
 ```
 ### Briefly discuss the difference between computing momentum as the relative change in prices or as the relative change in market capitalization.*
-The difference between using prices and market capitalization is rarely a large problem, but the change in market cap will always reflect a change in the public value of a company whereas a change in stock price might be due to stock split, which would have significant consequences for measuring momentum effects. 
+Since market cap is basically the stock price times volume, there is rarely a large distrinction between the to. But the change in market cap will always reflect a change in the public value of a company whereas a change in stock price might be due to stock split or buybacks, which would have significant implications for the stock price but not the actual market capitalization. 
 
 Create summary statistics for $Mom_{i,t}$  as follows: Each month, compute the mean, standard deviation,
 minimum, fifth percentile, 25th percentile, median, 75th percentile, 95th percentile, and maximum values
@@ -136,22 +136,20 @@ of the cross-sectional distribution of $Mom_{i,t}$.
 
 ```{r}
 
- data_for %>% 
+ table = data_for %>% 
   group_by(month) %>%
   summarise(across(
     momentum,
-    list(mean = mean,
-         sd = sd,
-         min = min,
+    list(mean = mean,sd = sd, min = min,
+         q25 = ~quantile(., 0.25),
+         median = median,
+         q75 = ~quantile(., 0.75),
          max = max
-         ) 
-  )) %>% summarise(across(-month,mean)) %>%
-  rename(mean=mktcap_daily_mean, sd=mktcap_daily_sd, min=mktcap_daily_min, max=mktcap_daily_max) %>%
-   pivot_longer(
-    everything()
-  )  %>% 
-  rename(mktcap=value,n=name) %>%
-  mutate(mktcap = format(mktcap, scientific = F, digits=2))
+         ),
+    .names = "{.fn}")) %>%
+  kableExtra::kable()
+
+
 ```
 
 *Then, report the time-series means for each cross-sectional
