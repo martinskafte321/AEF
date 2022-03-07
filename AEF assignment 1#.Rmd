@@ -135,29 +135,34 @@ minimum, fifth percentile, 25th percentile, median, 75th percentile, 95th percen
 of the cross-sectional distribution of $Mom_{i,t}$. 
 
 ```{r}
-
- table = data_for %>% 
+mom_stat = data_for %>% 
   group_by(month) %>%
   summarise(across(
     momentum,
-    list(mean = mean,sd = sd, min = min,
+    list(Mean = mean,SD = sd, min = min,
          q25 = ~quantile(., 0.25),
          median = median,
          q75 = ~quantile(., 0.75),
          max = max
          ),
-    .names = "{.fn}")) %>%
-  kableExtra::kable()
-
+    .names = "{.fn}"))
 
 ```
 
 *Then, report the time-series means for each cross-sectional
-value. What is the mean value of M omi,t in the average month? What is the cross-sectional standard
-deviation? Does momentum exhibit a positive correlation with log(mci,t)?*
+value. What is the mean value of $Mom_{i,t}$ in the average month? What is the cross-sectional standard deviation? 
+
+Does momentum exhibit a positive correlation with $log(mc_{i,t}$?*
 
 ```{r}
+mom_stat %>% 
+  summarise(across(-month,mean)) 
 
+data_for %>%
+  mutate(log_mktcap = log(mktcap)) %>%
+  select(momentum,log_mktcap) %>%
+  cor()
+  
 ```
-
+Yes, there is a positive correlation coefficient of 0.067 between the momentum value and log of market capitalization. 
 
