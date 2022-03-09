@@ -306,11 +306,17 @@ To assess this in more detail and to examine whether momentum has the ability to
 
 ```{r}
 strategy_portfolio = momentum_portfolios %>% 
+  group_by(permno) %>%
+  mutate(ret_excess_k_month_ahead = lead(ret_excess,1)) %>%
   group_by(month) %>%
   mutate(breakpoint = median(momentum),
          portfolio = case_when(momentum <= breakpoint ~ "low",
-                               momentum > breakpoint ~ "high")) %>%
+                               momentum > breakpoint ~ "high")) 
+
+  
   group_by(month,portfolio) %>%
+  
+  
   summarise(excess_ret = weighted.mean(ret_excess, mktcap)) # Value weighted return by high or low grouped momentum values. 
 
 strategy_portfolio %>% 
