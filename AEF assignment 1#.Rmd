@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
-```{r echo=FALSE, warning=FALSE}
+```{r echo=FALSE, warning=FALSE, message=FALSE}
 # Loading packages:
 library(RSQLite)
 library(dbplyr)
@@ -109,17 +109,6 @@ Summary statistics for ret_excess and mktcap shows that the mean return per mont
 
 ### 2. 
 
-```{r}
-crsp_monthly %>% group_by(permno) %>%
-mutate(ret_excess_lag = lag(ret_excess))
-
-crsp_monthly %>%
-  group_by(permno)%>%
-  mutate(month = month %m+% months(1))
-
-```
-
- 
 
 
 ### 3. Generate a new column mktcap_lag_12 which contains the firms’ market capitalization 12-month prior to the measurement date.
@@ -282,11 +271,12 @@ mom_portfolios_summary %>%
   scale_y_continuous(labels = percent) +
   theme(legend.position = "None")
 ```
+
 The plot shows that portfolios 1 and 10 has the highest alpha and decreasing going towards the center. Thus alpha is lowest for median momentum stocks. 
 
 
-* Finally, analyse the momentum strategy: a portfolio that goes long past winners (the highest decile) and short past
-losers (the lowest decile). 
+**Finally, analyse the momentum strategy: a portfolio that goes long past winners (the highest decile) and short past
+losers (the lowest decile).**
 ```{r}
 strategy_portfolio = momentum_portfolios %>% 
   group_by(month) %>%
@@ -308,3 +298,24 @@ Is the strategy market neutral (i.e., does it exhibit a market beta which is zer
 
 The test statistics shows that is it possible to generate (very) small alpha by having a short position in low momentum stocks and a long position in high momentum stocks. The alpha of this regression is 0,012%, which may be considered as insignificant. The insignificant alpha can be implied by the graph above, which shows that alpha is highest within the lowest- and highest momentum portfolios. A strategy in this case would be to go long these portfolios and short the rest.
 The strategy is not market neutral as the beta is -0.1. 
+
+#### One of the main conclusions in the momentum literature is that the timing of the measurement of momentum plays a substantial role in the nature of the relation between momentum and future stock returns.
+To assess this in more detail and to examine whether momentum has the ability to predict returns further in the future than the next month, repeat the univariate portfolio sorts but this time using the k-month-ahead excess return as the outcome variable for values of k ∈{1, 3, 6, 12}.
+
+**For which time-horizon does the momentum deliver the highest risk-adjusted performance?**
+
+```{r}
+strategy_portfolio = momentum_portfolios %>% 
+  group_by(month) %>%
+  mutate(breakpoint = median(momentum),
+         portfolio = case_when(momentum <= breakpoint ~ "low",
+                               momentum > breakpoint ~ "high")) %>%
+  group_by(month,portfolio) %>%
+  summarise(excess_ret = weighted.mean(ret_excess, mktcap)) # Value weighted return by high or low grouped momentum values. 
+
+strategy_portfolio %>% 
+  pivot_wider(names_from = portfolio, values_from = excess_ret) %>%
+  mutate(high_low = high - low) %>% 
+  left_join(factors_ff_monthly, by = "month") %>%
+  lm(high_low ~ mkt_excess, data = .) %>% broom::tidy()
+```
