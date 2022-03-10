@@ -89,7 +89,7 @@ ret = crsp_monthly %>%
 mkt = crsp_monthly %>% 
   group_by(month) %>%
   summarise(across(
-    mktcap,
+    mktcap, #listing which statistics we want included
     list(daily_mean = mean,
          daily_sd = sd,
          daily_min = min,
@@ -122,11 +122,13 @@ Lagging a variable can be a frustrating task, since the days of a month will dif
 
 First we create a variable by lagging the month column without touching the others. Next, we merge our sorting variable with the return data. We use the 12-month lagged marketcap as a sorting variable to ensure that the sorts rely only on information available when we create the portfolios.
 ```{r}
+#Creating the 12-month lagged mktcap variable by mutating the month col
 mktcap_lag_12 <- crsp_monthly %>%
   mutate(month = month %m+% months(12)) %>%
   select(permno, month, mktcap_lag_12 = mktcap) %>%
   drop_na()
 
+#Adding lagged mktcap to existing crsp_monthly dataset through a left join 
  data_for_sorting <- crsp_monthly %>%
   left_join(mktcap_lag_12, c("permno","month")) %>%
    drop_na()
@@ -135,30 +137,32 @@ mktcap_lag_12 <- crsp_monthly %>%
 ### Compute the momentum of stock i as the relative change in market capitalization, represented in percentage terms (1.00 is a 1% return) during the period covering months t−12 until t−1. Specifically, if $mc_{i,t}$ denotes the market capitalization of stock i in month t, compute momentum as  
 $$Mom_{i,t} = 100\frac{(mc_{i,t-1} −mc_{i,t-12})}{mc_{i,t-12}}$$
 ```{r}
+#Adding momentum column based on above formula in our dataset with lagged mktcap
 data_for_sorting <-  data_for_sorting %>%
   mutate(momentum =  100*(mktcap_lag-mktcap_lag_12)/mktcap_lag_12)
 ```
 ### Briefly discuss the difference between computing momentum as the relative change in prices or as the relative change in market capitalization.*
-Since market cap is basically the stock price times volume, there is rarely a large distrinction between the to. But the change in market cap will always reflect a change in the public value of a company whereas a change in stock price might be due to stock split or buybacks, which would have significant implications for the stock price but not the actual market capitalization. 
+Since market cap is basically the stock price times volume, there is rarely a large distinction between the two. But the change in market cap will always reflect a change in the public value of a company whereas a change in stock price might be due to stock split or buybacks, which would have significant implications for the stock price but not the actual market capitalization (unless prices are given in adjusted form, e.g. as per yahoo! finance). 
 
 Create summary statistics for $Mom_{i,t}$  as follows: Each month, compute the mean, standard deviation,
 minimum, fifth percentile, 25th percentile, median, 75th percentile, 95th percentile, and maximum values
 of the cross-sectional distribution of $Mom_{i,t}$. 
 
 ```{r}
+#Creating summary statistics for each month, i.e. 700+ rows of summary statistics
 mom_stat = data_for_sorting %>% 
   group_by(month) %>%
   summarise(across(
-    momentum,
-    list(Mean = mean,SD = sd, min = min,
-         q5 = ~quantile(., 0.05),
-         q25 = ~quantile(., 0.25),
-         median = median,
-         q75 = ~quantile(., 0.75),
-         q95 = ~quantile(., 0.95),
-         max = max
+    momentum, #For the momentum column, summarise the following elements in list()
+    list(Mean = mean,SD = sd, Min = min,
+         Q5 = ~quantile(., 0.05),
+         Q25 = ~quantile(., 0.25),
+         Median = median,
+         Q75 = ~quantile(., 0.75),
+         Q95 = ~quantile(., 0.95),
+         Max = max
          ),
-    .names = "{.fn}"))
+    .names = "{.fn}")) #Hvad gør denne præcis ved navnene?
 
 ```
 
@@ -168,9 +172,11 @@ value. What is the mean value of $Mom_{i,t}$ in the average month? What is the c
 Does momentum exhibit a positive correlation with $log(mc_{i,t}$?*
 
 ```{r}
+#Summarise the previously created montly summary statistics into one row by taking the mean in each column
 mom_stat %>% 
   summarise(across(-month,mean)) 
 
+#Plotting correlation matrix for momentum and log_mktcap 
 data_for_sorting %>%
   mutate(log_mktcap = log(mktcap)) %>%
   select(momentum,log_mktcap) %>%
