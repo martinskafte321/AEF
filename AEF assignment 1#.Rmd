@@ -306,32 +306,46 @@ To assess this in more detail and to examine whether momentum has the ability to
 
 ```{r}
 
-lag_excess_ret <- momentum_portfolios %>%
-  mutate(month = month %m+% months(3)) %>%
-  select(permno, month, ret_excess_k_month_ahead = ret_excess) 
+k = c(1,3,6,12)
 
+data = matrix(nrow=length(k),ncol = 2)
+colnames(data) <- c("k ahead", "alpha")
+
+
+for (i in seq_along(k) ) {
+
+ lag_excess_ret <- momentum_portfolios %>%
+  mutate(month = month %m+% months(k[[i]])) %>%
+  select(permno, month, ret_excess_k_month_ahead = ret_excess)
+ 
  momentum_portfolios_inc_lagged <- momentum_portfolios %>%
   left_join(lag_excess_ret, c("permno","month")) %>%
    drop_na()
  
- 
-strategy_portfolio = momentum_portfolios %>% 
-  group_by(permno) %>%
-  mutate(ret_excess_k_month_ahead = lead(ret_excess,3)) %>%
+
+strategy_portfolio = momentum_portfolios_inc_lagged %>% 
   group_by(month) %>%
   mutate(breakpoint = median(momentum),
          portfolio = case_when(momentum <= breakpoint ~ "low",
-                               momentum > breakpoint ~ "high")) 
-
-  
+                               momentum > breakpoint ~ "high")) %>%
   group_by(month,portfolio) %>%
-  
-  
-  summarise(excess_ret = weighted.mean(ret_excess, mktcap)) # Value weighted return by high or low grouped momentum values. 
+  summarise(ret_excess_k_month_ahead = weighted.mean(ret_excess_k_month_ahead, mktcap_lag)) # Value weighted return by high or low grouped momentum values. 
 
-strategy_portfolio %>% 
-  pivot_wider(names_from = portfolio, values_from = excess_ret) %>%
+estimate = strategy_portfolio %>% 
+  pivot_wider(names_from = portfolio, values_from = ret_excess_k_month_ahead) %>%
   mutate(high_low = high - low) %>% 
   left_join(factors_ff_monthly, by = "month") %>%
   lm(high_low ~ mkt_excess, data = .) %>% broom::tidy()
+
+
+data[i,"alpha"] = estimate$estimate[1]
+data[i,"k ahead"] = k[[i]]
+
+}
+
+data = as.table(data)
+
+as.table(data) %>%
+  ggplot(aes(x = "k ahead", y = "alpha", color = "k ahead")) + 
+  geom_bar()
 ```
