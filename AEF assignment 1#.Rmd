@@ -307,19 +307,9 @@ To assess this in more detail and to examine whether momentum has the ability to
 
 ```{r}
 
-k = c(1,3,6,12)
-data = matrix(nrow=length(k),ncol = 2)
-colnames(data) <- c("k ahead", "alpha")
-
-
-for (i in seq_along(k) ) {
-
- lag_excess_ret <- momentum_portfolios %>%
-  mutate(month = month %m+% months(k[[i]])) %>%
-  select(permno, month, ret_excess_k_month_ahead = ret_excess)
- 
- momentum_portfolios_inc_lagged <- momentum_portfolios %>%
-  left_join(lag_excess_ret, c("permno","month")) %>%
+portfolio = function(data = data) {
+  momentum_portfolios_inc_lagged <- momentum_portfolios %>%
+  left_join(data, c("permno","month")) %>%
    drop_na()
  
 
@@ -336,14 +326,29 @@ estimate = strategy_portfolio %>%
   mutate(high_low = high - low) %>% 
   left_join(factors_ff_monthly, by = "month") %>%
   lm(high_low ~ mkt_excess, data = .) %>% broom::tidy()
+}
+
+```
+
+```{r}
+
+k = c(1,3,6,12)
+data = matrix(nrow=length(k),ncol = 2)
+colnames(data) <- c("k ahead", "alpha")
+
+
+for (i in seq_along(k) ) {
+
+ lag_excess_ret <- momentum_portfolios %>%
+  mutate(month = month %m+% months(k[[i]])) %>%
+  select(permno, month, ret_excess_k_month_ahead = ret_excess)
+ 
+ estimate = portfolio(lag_excess_ret)
+ 
 
 
 data[i,"alpha"] = estimate$estimate[1]
 data[i,"k ahead"] = k[[i]]
 
 }
-
-data = as.table(data)
-
-
 ```
