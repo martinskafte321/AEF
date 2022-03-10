@@ -283,7 +283,7 @@ strategy_portfolio = momentum_portfolios %>%
   mutate(breakpoint_low = 1,
          breakpoint_high = 10,
          portfolio = case_when(portfolio <= breakpoint_low ~ "low",
-                               portfolio > breakpoint_high ~ "high")) %>%
+                               portfolio >= breakpoint_high ~ "high")) %>%
   group_by(month,portfolio) %>%
   summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag)) # Value weighted return by high or low grouped momentum values. 
 
