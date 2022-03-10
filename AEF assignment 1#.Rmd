@@ -23,12 +23,6 @@ library(scales)
 library(slider)
 library(furrr)
 
-teat 
-
-test
-
-
-#setwd('C:/Users/Marti/OneDrive - University of Copenhagen/KU/2. semester/Advanced Empirical Finance/AEF')
 ```
 
 ### 1. Read in the monthly CRSP date (crsp_monthly) and the monthly market excess returns (factors_ff_monthly) from the tidy_finance.sqlite database. Very briefly state the definition of the variables permno, ret_excess and mktcap. Provide suitable summary statistics of the cross-section of monthly excess returns and market capitalization in the CRSP sample.
@@ -107,10 +101,12 @@ mkt = crsp_monthly %>%
 ret %>% 
   cbind(mkt) %>%
   select(-n)
+
+
 ```
 Summary statistics for ret_excess and mktcap shows that the mean return per month is 0.79% although the median is -0.0004%. An important distinction between the variables is that ret_excess is in relative numbers, while mktcap of course is absolute, since the return is a relative change and market cap is a true number. 
 
-### 2. 
+#### 2. Generate a new column ret_excess_lag which contains the previous month excess return for the same firm for each row in the sample. Briefly state why crsp_monthly %>% group_by(permno) %>% mutate(ret_excess_lag = lag(ret_excess)) does not provide the correct result if crsp_monthly contains implicitly missing values (i.e. permno-month combinations that are simply not present in the data). Report suitable summary statistics or visualizations that show if returns rt and rt−1 exhibit autocorrelation that is significantly different from zero. What do your results imply? Is there short-term momentum?
 
 
 
@@ -282,10 +278,12 @@ The plot shows that portfolios 1 and 10 has the highest alpha and decreasing goi
 losers (the lowest decile).**
 ```{r}
 strategy_portfolio = momentum_portfolios %>% 
+  mutate(portfolio = as.numeric(portfolio)) %>%
   group_by(month) %>%
-  mutate(breakpoint = median(momentum),
-         portfolio = case_when(momentum <= breakpoint ~ "low",
-                               momentum > breakpoint ~ "high")) %>%
+  mutate(breakpoint_low = 1,
+         breakpoint_high = 10,
+         portfolio = case_when(portfolio <= breakpoint_low ~ "low",
+                               portfolio > breakpoint_high ~ "high")) %>%
   group_by(month,portfolio) %>%
   summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag)) # Value weighted return by high or low grouped momentum values. 
 
@@ -315,13 +313,15 @@ portfolio = function(data = data) {
   left_join(data, c("permno","month")) %>%
    drop_na()
  
-
 strategy_portfolio = momentum_portfolios_inc_lagged %>% 
+  mutate(portfolio = as.numeric(portfolio)) %>%
   group_by(month) %>%
-  mutate(breakpoint = median(momentum),
-         portfolio = case_when(momentum <= breakpoint ~ "low",
-                               momentum > breakpoint ~ "high")) %>%
+  mutate(breakpoint_low = 1,
+         breakpoint_high = 10,
+         portfolio = case_when(portfolio <= breakpoint_low ~ "low",
+                               portfolio >= breakpoint_high ~ "high")) %>%
   group_by(month,portfolio) %>%
+  drop_na() %>%
   summarise(ret_excess_k_month_ahead = weighted.mean(ret_excess_k_month_ahead, mktcap_lag)) # Value weighted return by high or low grouped momentum values. 
 
 estimate = strategy_portfolio %>% 
@@ -370,3 +370,14 @@ test %>%
   scale_y_continuous(labels = percent) +
   theme(legend.position = "None")
 ``` 
+
+### 6. Most academic studies ignore real world costs and other forms of slippage when examining factors, which is likely a larger issue for momentum due to its higher turnover. The concern is that momentum is so costly to trade that its return premium is diminished in the real world. 
+
+#### First, based on your findings in 1. and 3., briefly explain why you think a momentum strategy could be costlier to trade than, say, a strategy based on size sorts.
+When a given portfolio selection is based on i.e., past year market cap momentum, then the composition of the portfolio would change frequently as this is based purely on the performance of the stocks. Basically, since the analysis is made purely on activity from the past 12 months the portfolio composotion will change often. Compared to a beta selection strategy where the analysis is made from i.e., 20 or 30 year historic stock price data, then the estimate would change much less frequently. This dramatically increases the need for trading activity and thus transaction costs of the momentum strategy. And for the momentum strategy to be efficient, there will have to be frequent turnover, otherwise the strategy might not be able to catch it if a stock loses momentum after it's traded.  
+
+
+
+#### Then, propose an alternative strategy that may be able to effectively capture the momentum premium but which at the same time delivers lower trading costs, e.g. because the turnover is smaller, the strategy takes less extreme (short) positions or is tilted towards stocks that are cheaper to trade. 
+
+Describe the strategy and implement it within the CRSP sample. Report the resulting Sharpe-ratio and average turnover and compare to the baseline momentum strategy from exercise 4.
