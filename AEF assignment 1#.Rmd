@@ -243,7 +243,7 @@ momentum_portfolios %>%
 ```{r}
 vw_momentum_portfolios = momentum_portfolios %>%
   group_by(portfolio, month) %>%
-  summarize(excess_ret = weighted.mean(ret_excess, mktcap), .groups = "drop") # The value weighted return
+  summarize(excess_ret = weighted.mean(ret_excess, mktcap_lag), .groups = "drop") # The value weighted return
 
 
 mom_portfolios_summary <- vw_momentum_portfolios %>%
@@ -284,7 +284,7 @@ strategy_portfolio = momentum_portfolios %>%
          portfolio = case_when(momentum <= breakpoint ~ "low",
                                momentum > breakpoint ~ "high")) %>%
   group_by(month,portfolio) %>%
-  summarise(excess_ret = weighted.mean(ret_excess, mktcap)) # Value weighted return by high or low grouped momentum values. 
+  summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag)) # Value weighted return by high or low grouped momentum values. 
 
 strategy_portfolio %>% 
   pivot_wider(names_from = portfolio, values_from = excess_ret) %>%
@@ -296,7 +296,7 @@ strategy_portfolio %>%
 * What do you conclude about the performance of the momentum strategy?
 Is the strategy market neutral (i.e., does it exhibit a market beta which is zero)? Does the strategy deliver abnormal excess returns (i.e., a positive alpha)?
 
-The test statistics shows that is it possible to generate (very) small alpha by having a short position in low momentum stocks and a long position in high momentum stocks. The alpha of this regression is 0,012%, which may be considered as insignificant. The insignificant alpha can be implied by the graph above, which shows that alpha is highest within the lowest- and highest momentum portfolios. A strategy in this case would be to go long these portfolios and short the rest.
+The test statistics shows that is it possible to generate (very) small alpha by having a short position in low momentum stocks and a long position in high momentum stocks. The alpha of this regression is 0,14%, which may be considered as insignificant. The insignificant alpha can be implied by the graph above, which shows that alpha is highest within the lowest- and highest momentum portfolios. A strategy in this case would be to go long these portfolios and short the rest.
 The strategy is not market neutral as the beta is -0.1. 
 
 #### One of the main conclusions in the momentum literature is that the timing of the measurement of momentum plays a substantial role in the nature of the relation between momentum and future stock returns.
@@ -305,9 +305,19 @@ To assess this in more detail and to examine whether momentum has the ability to
 **For which time-horizon does the momentum deliver the highest risk-adjusted performance?**
 
 ```{r}
+
+lag_excess_ret <- momentum_portfolios %>%
+  mutate(month = month %m+% months(3)) %>%
+  select(permno, month, ret_excess_k_month_ahead = ret_excess) 
+
+ momentum_portfolios_inc_lagged <- momentum_portfolios %>%
+  left_join(lag_excess_ret, c("permno","month")) %>%
+   drop_na()
+ 
+ 
 strategy_portfolio = momentum_portfolios %>% 
   group_by(permno) %>%
-  mutate(ret_excess_k_month_ahead = lead(ret_excess,1)) %>%
+  mutate(ret_excess_k_month_ahead = lead(ret_excess,3)) %>%
   group_by(month) %>%
   mutate(breakpoint = median(momentum),
          portfolio = case_when(momentum <= breakpoint ~ "low",
