@@ -197,6 +197,7 @@ We need to create a function that is able to sort stocks into a number of portfo
 First, we create a function that is able to sort stocks into a number of portfolios based on their momentum score. The output one gets when running the function with a dataframe is a new column that contains the number of the portfolio in which the stock belongs. 
 
 ```{r, echo=FALSE}
+#data = dataset, e.g. "crsp_data", var = column, n_portfolios = number of portfolios
 assign_portfolio <- function(data, var, n_portfolios) {
   breakpoints <- data %>%
     summarize(breakpoint = quantile({{ var }},
@@ -221,14 +222,15 @@ assign_portfolio <- function(data, var, n_portfolios) {
   momentum_portfolios = data_for_sorting %>%
   group_by(month) %>%
   mutate(
-    portfolio = assign_portfolio(
-      data = cur_data(),
+    portfolio = assign_portfolio( #calling function to sort stocks into 10 pf's using momentum column in assign_portfolios dataset
+      data = cur_data(), #use current set, i.e. assign_portfolio
       var = momentum,
       n_portfolios = 10
     ),
     portfolio = as.factor(portfolio)
   )
 
+#Call to see that there is a new column called portfolio
 momentum_portfolios%>%
   head()
   
@@ -243,8 +245,8 @@ present the equal-weighted average values of $Mom_{i,t}$ and $mc_{i,t}$ for each
 momentum_portfolios %>% 
   group_by(portfolio) %>%
   summarise(
-    mom_mean = mean(momentum),
-    mc_mean = mean(mktcap)
+    mom_mean = mean(momentum), #arithmetic average of momentum
+    mc_mean = mean(mktcap) #arithmetic average of mktcap
     ) 
 ```
 
