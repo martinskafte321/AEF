@@ -307,7 +307,6 @@ To assess this in more detail and to examine whether momentum has the ability to
 ```{r}
 
 k = c(1,3,6,12)
-
 data = matrix(nrow=length(k),ncol = 2)
 colnames(data) <- c("k ahead", "alpha")
 
@@ -345,7 +344,5 @@ data[i,"k ahead"] = k[[i]]
 
 data = as.table(data)
 
-as.table(data) %>%
-  ggplot(aes(x = "k ahead", y = "alpha", color = "k ahead")) + 
-  geom_bar()
+
 ```
