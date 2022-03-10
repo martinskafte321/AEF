@@ -23,6 +23,7 @@ library(scales)
 library(slider)
 library(furrr)
 
+teat
 
 
 #setwd('C:/Users/Marti/OneDrive - University of Copenhagen/KU/2. semester/Advanced Empirical Finance/AEF')
