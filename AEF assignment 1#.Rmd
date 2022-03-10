@@ -304,6 +304,7 @@ The strategy is not market neutral as the beta is -0.1.
 To assess this in more detail and to examine whether momentum has the ability to predict returns further in the future than the next month, repeat the univariate portfolio sorts but this time using the k-month-ahead excess return as the outcome variable for values of k ∈{1, 3, 6, 12}.
 
 **For which time-horizon does the momentum deliver the highest risk-adjusted performance?**
+The momentum strategy delivers the highest risk-adjusted excess return with a 1-month ahead horizon. 
 
 ```{r}
 
@@ -352,3 +353,18 @@ data[i,"k ahead"] = k[[i]]
 
 }
 ```
+
+```{r}
+test = data %>% as.data.frame() %>% rename(k = 'k ahead')
+test %>%
+  ggplot(aes(x=k, y=alpha, fill=k)) + 
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Alphas of momentum-sorted portfolios k month-ahead",
+    x = "k months ahead",
+    y = "CAPM alpha",
+    fill = "Portfolio"
+  ) +
+  scale_y_continuous(labels = percent) +
+  theme(legend.position = "None")
+``` 
