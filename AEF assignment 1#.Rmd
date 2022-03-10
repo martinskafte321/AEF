@@ -35,21 +35,25 @@ library(furrr)
 # 4.1 Data preparation
 # ******************************************
 
+#Connecting to the database
 tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite",
                           extended_types = TRUE
       )
 
+#Reading in crsp_monthly dataset
 crsp_monthly <- tbl(tidy_finance, "crsp_monthly") %>%
   collect() %>%
   mutate(month = as.Date(as.POSIXct.Date(month)))
 
+#Reading in factors_ff_monthly dataset
 factors_ff_monthly <- tbl(tidy_finance, "factors_ff_monthly") %>%
   collect() %>%
   mutate(month = as.Date(as.POSIXct.Date(month)))
 
+#Merging crsp_monthly and factors_ff_monthly through a left-join, merging by the common "month" column 
 crsp_monthly <- crsp_monthly %>%
   left_join(factors_ff_monthly, by = "month") %>%
-  select(permno, month, ret_excess, mkt_excess, mktcap,mktcap_lag)
+  select(permno, month, ret_excess, mkt_excess, mktcap,mktcap_lag) #selecting these columns from our joint set
 
 
 dbListTables(tidy_finance) # check the database
@@ -63,10 +67,11 @@ Definition of mktcap, as per {mktcap}: The variable 'mktcap' is defined as the m
 
 *Provide suitable summary statistics of the cross-section of monthly excess returns and market capitalization in the CRSP sample*
 ```{r}
+#Creating summary statistics for the excess return
 ret = crsp_monthly %>% 
   group_by(month) %>%
   summarise(across(
-    ret_excess,
+    ret_excess, #listing which statistics we want included
     list(daily_mean = mean,
          daily_sd = sd,
          daily_min = min,
@@ -80,7 +85,7 @@ ret = crsp_monthly %>%
   rename(ret_excess=value) %>%
   mutate(ret_excess = format(ret_excess, scientific = F, digits=2))
 
-
+#Creating summary statistics for the market cap
 mkt = crsp_monthly %>% 
   group_by(month) %>%
   summarise(across(
@@ -98,6 +103,7 @@ mkt = crsp_monthly %>%
   rename(mktcap=value,n=name) %>%
   mutate(mktcap = format(mktcap, scientific = F, digits=2))
 
+#Merging the summary statistics so that they are presented for both excess returns and market cap
 ret %>% 
   cbind(mkt) %>%
   select(-n)
