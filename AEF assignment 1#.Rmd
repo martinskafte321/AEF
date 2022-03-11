@@ -200,19 +200,19 @@ First, we create a function that is able to sort stocks into a number of portfol
 #data = dataset, e.g. "crsp_data", var = column, n_portfolios = number of portfolios
 assign_portfolio <- function(data, var, n_portfolios) {
   breakpoints <- data %>%
-    summarize(breakpoint = quantile({{ var }},
-                                    probs = seq(0, 1, length.out = n_portfolios + 1),
-                                    na.rm = TRUE
+    summarize(breakpoint = quantile({{ var }}, #quantile () produces sample quantiles corresponding to the given probabilities. The smallest obs = 0, largest = 1
+                                    probs = seq(0, 1, length.out = n_portfolios + 1), #numeric vector of probabilities
+                                    na.rm = TRUE #Removes all N/A observations
     )) %>%
     pull(breakpoint) %>%
     as.numeric()
   
   data %>%
-    mutate(portfolio = findInterval({{ var }},
+    mutate(portfolio = findInterval({{ var }}, #Given a vector of non-decreasing breakpoints in var, find the interval containing each element of breakpoints
                                     breakpoints,
-                                    all.inside = TRUE
+                                    all.inside = TRUE 
     )) %>%
-    pull(portfolio)
+    pull(portfolio) #Returns the portfolio number for each security
 }
 ```
 
@@ -222,8 +222,8 @@ assign_portfolio <- function(data, var, n_portfolios) {
   momentum_portfolios = data_for_sorting %>%
   group_by(month) %>%
   mutate(
-    portfolio = assign_portfolio( #calling function to sort stocks into 10 pf's using momentum column in assign_portfolios dataset
-      data = cur_data(), #use current set, i.e. assign_portfolio
+    portfolio = assign_portfolio( #calling function to sort stocks into 10 pf's using momentum column in assign_portfolios dataset and add portfolio column to data_for_sorting
+      data = cur_data(), #use current set, i.e. assign_portfolios
       var = momentum,
       n_portfolios = 10
     ),
