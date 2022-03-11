@@ -392,11 +392,12 @@ When a given portfolio selection is based on i.e., past year market cap momentum
 
 
 
-#### Then, propose an alternative strategy that may be able to effectively capture the momentum premium but which at the same time delivers lower trading costs, e.g. because the turnover is smaller, the strategy takes less extreme (short) positions or is tilted towards stocks that are cheaper to trade. Describe the strategy and implement it within the CRSP sample. Report the resulting Sharpe-ratio and average turnover and compare to the baseline momentum strategy from exercise 4.
+#### Then, propose an alternative strategy that may be able to effectively capture the momentum premium but which at the same time delivers lower trading costs. Describe the strategy and implement it within the CRSP sample. Report the resulting Sharpe-ratio and average turnover and compare to the baseline momentum strategy from exercise 4.
 
+A portfolio that would capture a momentum effect but at the same time delivers lower trading costs, compared to the portfolio in 4, can be a portfolio with broader specifications of momentum. Instead of buying the upper 10th quantile of momentum and selling the 1st quantile, we buy the upper 3 quantiles and sell the lower 3. The idea is that this will result in a lower turnover, as assets enter and exit the buy and sell parts of the portfolio less frequently. 
 
 ```{r}
-strategy_portfolio = momentum_portfolios %>% 
+cheaperportfolio = momentum_portfolios %>% 
   mutate(portfolio = as.numeric(portfolio)) %>%
   group_by(month) %>%
   mutate(breakpoint_low = 3,
@@ -406,10 +407,12 @@ strategy_portfolio = momentum_portfolios %>%
   group_by(month,portfolio) %>%
   summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag)) # Value weighted return by high or low grouped momentum values. 
 
-strategy_portfolio %>% 
+cheaperportfolio %>% 
   pivot_wider(names_from = portfolio, values_from = excess_ret) %>%
   mutate(high_low = high - low) %>% 
   left_join(factors_ff_monthly, by = "month") %>%
   lm(high_low ~ mkt_excess, data = .) %>% broom::tidy()
 ```
+
+
 
