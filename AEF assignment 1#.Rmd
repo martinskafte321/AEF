@@ -33,9 +33,8 @@ library(furrr)
 # ******************************************
 
 #Connecting to the database
-tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite",
-                          extended_types = TRUE
-      )
+tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
+                          extended_types = TRUE)
 
 #Reading in crsp_monthly dataset
 crsp_monthly <- tbl(tidy_finance, "crsp_monthly") %>%
@@ -222,7 +221,9 @@ assign_portfolio <- function(data, var, n_portfolios) {
 ```{r}
 #We can use the above function to sort stocks into ten portfolios each month using lagged betas and compute value-weighted returns for each portfolio. Note that we transform the portfolio column to a factor variable because it provides more convenience for the figure construction below.
 
-  momentum_portfolios = data_for_sorting %>%
+#calling function to sort stocks into 10 pf's using momentum column in assign_portfolios dataset and add portfolio column to data_for_sorting
+
+momentum_portfolios = data_for_sorting %>%
   group_by(month) %>%
   mutate(
     portfolio = assign_portfolio( #calling function to sort stocks into 10 pf's using momentum column in assign_portfolios dataset and add portfolio column to data_for_sorting
@@ -230,8 +231,7 @@ assign_portfolio <- function(data, var, n_portfolios) {
       var = momentum,
       n_portfolios = 10
     ),
-    portfolio = as.factor(portfolio)
-  )
+    portfolio = as.factor(portfolio))
 
 #Call to see that there is a new column called portfolio
 momentum_portfolios%>%
@@ -453,12 +453,13 @@ all_guys_old <- old_momentum %>%
          portfolio = case_when(portfolio <= breakpoint_low ~ "low", portfolio >= breakpoint_high ~ "high"),
          portfolio_lag = case_when(portfolio_lag <= breakpoint_low ~ "low", portfolio_lag >= breakpoint_high ~ "high")) %>%
   select(permno, month, portfolio, portfolio_lag) %>%
+  mutate_all(~replace(., is.na(.), "NA")) %>%
   mutate(traded = ifelse(portfolio==portfolio_lag, 1, 0)) %>%
   group_by(month) %>%
-  summarise(count_traded = sum(traded != 1)) #CHECK THIS TOO
+  summarise(count_traded = sum(traded == 0)) #CHECK THIS TOO
 ```
-  group_by(month) %>%
-  summarise(count_traded = sum(traded == 1)) #CHECK THIS TOO
+
+
 
 
 
