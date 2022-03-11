@@ -390,29 +390,57 @@ test %>%
 #### First, based on your findings in 1. and 3., briefly explain why you think a momentum strategy could be costlier to trade than, say, a strategy based on size sorts.
 When a given portfolio selection is based on i.e., past year market cap momentum, then the composition of the portfolio would change frequently as this is based purely on the performance of the stocks. Basically, since the analysis is made purely on activity from the past 12 months the portfolio composotion will change often. Compared to a beta selection strategy where the analysis is made from i.e., 20 or 30 year historic stock price data, then the estimate would change much less frequently. This dramatically increases the need for trading activity and thus transaction costs of the momentum strategy. And for the momentum strategy to be efficient, there will have to be frequent turnover, otherwise the strategy might not be able to catch it if a stock loses momentum after it's traded.  
 
+### Then, propose an alternative strategy that may be able to effectively capture the momentum premium but which at the same time delivers lower trading costs. Describe the strategy and implement it within the CRSP sample. Report the resulting Sharpe-ratio and average turnover and compare to the baseline momentum strategy from exercise 4.
 
-
-#### Then, propose an alternative strategy that may be able to effectively capture the momentum premium but which at the same time delivers lower trading costs. Describe the strategy and implement it within the CRSP sample. Report the resulting Sharpe-ratio and average turnover and compare to the baseline momentum strategy from exercise 4.
-
-A portfolio that would capture a momentum effect but at the same time delivers lower trading costs, compared to the portfolio in 4, can be a portfolio with broader specifications of momentum. Instead of buying the upper 10th quantile of momentum and selling the 1st quantile, we buy the upper 3 quantiles and sell the lower 3. The idea is that this will result in a lower turnover, as assets enter and exit the buy and sell parts of the portfolio less frequently. 
+A portfolio that would capture a momentum effect but at the same time deliver lower trading costs, compared to the portfolio in 4, can be a portfolio with broader specifications of momentum. Instead of buying the upper 10th quantile of momentum and selling the 1st quantile, we buy the assets with a momentum above the median and sell those below the median. The idea is that this will result in a lower turnover, as assets enter and exit the buy and sell parts of the portfolio less frequently. 
 
 ```{r}
 cheaperportfolio = momentum_portfolios %>% 
   mutate(portfolio = as.numeric(portfolio)) %>%
   group_by(month) %>%
-  mutate(breakpoint_low = 3,
-         breakpoint_high = 7,
-         portfolio = case_when(portfolio <= breakpoint_low ~ "low",
-                               portfolio >= breakpoint_high ~ "high")) %>%
-  group_by(month,portfolio) %>%
+  mutate(breakpoint = 5,
+     portfolio = case_when(portfolio <= breakpoint ~ "sell",
+                               portfolio >= breakpoint ~ "buy")) %>%
+  group_by(month, portfolio) %>%
   summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag)) # Value weighted return by high or low grouped momentum values. 
+
+new_momentum = data_for_sorting %>%
+  group_by(month) %>%
+  mutate(
+    portfolio = assign_portfolio(
+    data = cur_data(), #use current set, i.e. assign_portfolios
+      var = momentum,
+      n_portfolios = 2
+    ),
+    portfolio = as.factor(portfolio)
+  )
+  
+lag_guys <- new_momentum %>%
+  mutate(month = month %m+% months(1)) %>%
+  select(permno, month, portfolio_lag = portfolio) %>%
+  drop_na()
+
+all_guys <- new_momentum %>%
+  left_join(lag_guys, c("permno","month")) %>%
+  drop_na() %>%
+  select(permno, month, portfolio, portfolio_lag) %>%
+  mutate(traded = ifelse(portfolio==portfolio_lag, 1, 0)) %>%
+  group_by(month) %>%
+  summarise(count_traded = sum(traded == 1))
 
 cheaperportfolio %>% 
   pivot_wider(names_from = portfolio, values_from = excess_ret) %>%
-  mutate(high_low = high - low) %>% 
+  mutate(high_low = buy - sell) %>% 
   left_join(factors_ff_monthly, by = "month") %>%
   lm(high_low ~ mkt_excess, data = .) %>% broom::tidy()
 ```
 
 
 
+
+
+
+
+
+
+  
