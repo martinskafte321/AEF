@@ -404,6 +404,7 @@ cheaperportfolio = momentum_portfolios %>%
   group_by(month, portfolio) %>%
   summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag)) # Value weighted return by high or low grouped momentum values. 
 
+### Turnover for new portfolio
 new_momentum = data_for_sorting %>%
   group_by(month) %>%
   mutate(
@@ -426,15 +427,46 @@ all_guys <- new_momentum %>%
   select(permno, month, portfolio, portfolio_lag) %>%
   mutate(traded = ifelse(portfolio==portfolio_lag, 1, 0)) %>%
   group_by(month) %>%
-  summarise(count_traded = sum(traded == 1))
+  summarise(count_traded = sum(traded == 0) * 2) #CHECK THIS
 
 cheaperportfolio %>% 
   pivot_wider(names_from = portfolio, values_from = excess_ret) %>%
   mutate(high_low = buy - sell) %>% 
   left_join(factors_ff_monthly, by = "month") %>%
   lm(high_low ~ mkt_excess, data = .) %>% broom::tidy()
-```
 
+### Turnover for old portfolio
+old_momentum = data_for_sorting %>%
+  group_by(month) %>%
+  mutate(
+    portfolio = assign_portfolio(
+    data = cur_data(), #use current set, i.e. assign_portfolios
+      var = momentum,
+      n_portfolios = 10
+    ),
+    portfolio = as.factor(portfolio))
+
+lag_guys_old <- old_momentum %>%
+  mutate(month = month %m+% months(1)) %>%
+  select(permno, month, portfolio_lag = portfolio) %>%
+  drop_na()
+
+all_guys_old <- old_momentum %>%
+  left_join(lag_guys_old, c("permno","month")) %>%
+  drop_na() %>%
+  mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
+  group_by(month) %>%
+  mutate(breakpoint_low = 1,
+         breakpoint_high = 10,
+         portfolio = case_when(portfolio <= breakpoint_low ~ "low", portfolio >= breakpoint_high ~ "high"),
+         portfolio_lag = case_when(portfolio_lag <= breakpoint_low ~ "low", portfolio_lag >= breakpoint_high ~ "high")) %>%
+  select(permno, month, portfolio, portfolio_lag) %>%
+  mutate(traded = ifelse(portfolio==portfolio_lag, 1, 0)) %>%
+  group_by(month) %>%
+  summarise(count_traded = sum(traded != 1)) #CHECK THIS TOO
+```
+  group_by(month) %>%
+  summarise(count_traded = sum(traded == 1)) #CHECK THIS TOO
 
 
 
