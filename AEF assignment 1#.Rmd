@@ -27,9 +27,6 @@ library(furrr)
 
 ### 1. Read in the monthly CRSP date (crsp_monthly) and the monthly market excess returns (factors_ff_monthly) from the tidy_finance.sqlite database. Very briefly state the definition of the variables permno, ret_excess and mktcap. Provide suitable summary statistics of the cross-section of monthly excess returns and market capitalization in the CRSP sample.
 
-
-
-
 ```{r}
 # ******************************************
 # 4.1 Data preparation
@@ -58,14 +55,15 @@ crsp_monthly <- crsp_monthly %>%
 
 dbListTables(tidy_finance) # check the database
 ```
-*Very briefly state the definition of the variables permno, ret_excess and mktcap*. 
+
+# Very briefly state the definition of the variables permno, ret_excess and mktcap*. 
 Definition of PERMNO, as per {PERMNO}: "PERMNO is a unique permanent security identification number assigned by CRSP to each security". Thus PERMNO is a unique company identifier. 
 
 Definition of excess returns, as per {exret}: Excess return for a stock is the difference between the stock return and the return on the risk-free security over the same period. For such risk-free securities, it is common to use a government bond such as a 10-year US Treasury bond.\\ 
 
 Definition of mktcap, as per {mktcap}: The variable 'mktcap' is defined as the market capitalization, which refers to the total dollar market value of a company's outstanding shares of stock. Market capitalization is commonly referred to as "market cap," and is calculated by multiplying the total number of a company's outstanding shares by the current market price of one share.
 
-*Provide suitable summary statistics of the cross-section of monthly excess returns and market capitalization in the CRSP sample*
+# Provide suitable summary statistics of the cross-section of monthly excess returns and market capitalization in the CRSP sample*
 ```{r}
 #Creating summary statistics for the excess return
 ret = crsp_monthly %>% 
@@ -107,18 +105,24 @@ mkt = crsp_monthly %>%
 ret %>% 
   cbind(mkt) %>%
   select(-n)
-
-
 ```
 Summary statistics for ret_excess and mktcap shows that the mean return per month is 0.79% although the median is -0.0004%. An important distinction between the variables is that ret_excess is in relative numbers, while mktcap of course is absolute, since the return is a relative change and market cap is a true number. 
 
 #### 2. Generate a new column ret_excess_lag. Briefly state why crsp_monthly %>% group_by(permno) %>% mutate(ret_excess_lag = lag(ret_excess)) does not provide the correct result if crsp_monthly contains implicitly missing values. Report suitable summary statistics or visualizations that show if returns rt and rt−1 exhibit autocorrelation that is significantly different from zero. What do your results imply? Is there short-term momentum?
 
 # Briefly stating why the rpovided code provides incorrect results.
-
 If crsp_monthly contains implicitly missing values, this will cause a ret_excess_lag to not necessarily represent the value of the previous month, but the previous value in the dataset. An implicitly missing value then makes a ret_excess_lag value represent the second lagged value. 
 
-# 
+# Generate ret_excess_lag
+```{r}
+ret_excess_lag <- crsp_monthly %>%
+  mutate(month = month %m+% months(1)) %>%
+  select(permno, month, ret_excess, ret_excess_lag) %>%
+  drop_na()
+
+
+```
+
 
 ### 3. Generate a new column mktcap_lag_12 which contains the firms’ market capitalization 12-month prior to the measurement date.
 
