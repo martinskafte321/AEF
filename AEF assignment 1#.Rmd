@@ -116,14 +116,43 @@ Summary statistics for ret_excess and mktcap shows that the mean return per mont
 If crsp_monthly contains implicitly missing values, this will cause a ret_excess_lag to not necessarily represent the value of the previous month, but the previous value in the dataset. An implicitly missing value then makes a ret_excess_lag value represent the second lagged value. 
 
 # Generate ret_excess_lag
+Even without implicitly missing values, the given code returns a variable with missing values for the first cell of every permno. The following code can be used to avoid missing values.
+```{r}
+ret_excess_lag <- crsp_monthly %>%
+  mutate(month = month %m+% months(1)) %>%
+  select(permno, month, ret_excess_lag = ret_excess)
+  
+  crsp_monthly <- crsp_monthly %>%
+    left_join(ret_excess_lag, by = c("permno", "month"))
+  crsp_monthly
+```
+
+
+# Investigating potential autocorrelation in ret_excess_lag. 
+
 ```{r}
 crsp_monthly %>%
-  mutate(month = month %m+% months(1)) %>%
-  select(permno, month, ret_excess_lag = ret_excess) %>%
-  drop_na()
-
-
+  drop_na() %>%
+  ggplot(aes(x = month, y = ret_excess_lag)) +
+  geom_line() +
+  labs(
+    x = NULL, 
+    y = NULL,
+    title = "ret_excess_lag",
+    subtitle = "Excess returns over time"
+  )
 ```
+As the mean of returns is non-constant, it does not fluctuate around a constant value, returns suffer from autocorrelation. 
+
+```{r}
+ret_excess_lag %>%
+  select(month, ret_excess_lag) %>%
+pacf(month, ret_excess_lag)
+
+pacf(ret_excess_lag[ret_excess_lag])
+```
+
+
 
 
 ### 3. Generate a new column mktcap_lag_12 which contains the firms’ market capitalization 12-month prior to the measurement date.
