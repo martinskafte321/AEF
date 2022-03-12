@@ -387,62 +387,68 @@ When a given portfolio selection is based on i.e., past year market cap momentum
 A portfolio that would capture a momentum effect but at the same time deliver lower trading costs, compared to the portfolio in 4, can be a portfolio with broader specifications of momentum. Instead of buying the upper 10th quantile of momentum and selling the 1st quantile, we buy the assets with a momentum above the median and sell those below the median. The idea is that this will result in a lower turnover, as assets enter and exit the buy and sell parts of the portfolio less frequently. 
 
 ```{r}
-cheaperportfolio = momentum_portfolios %>% 
-  mutate(portfolio = as.numeric(portfolio)) %>%
-  group_by(month) %>%
-  mutate(breakpoint = 5,
-     portfolio = case_when(portfolio <= breakpoint ~ "sell",
-                               portfolio >= breakpoint ~ "buy")) %>%
-  group_by(month, portfolio) %>%
-  summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag)) # Value weighted return by high or low grouped momentum values. 
+#We dont use these lines for anything right now 
+#cheaperportfolio = momentum_portfolios %>% 
+  #mutate(portfolio = as.numeric(portfolio)) %>%
+  #group_by(month) %>%
+  #mutate(breakpoint = 5,
+     #portfolio = case_when(portfolio <= breakpoint ~ "sell",
+                               #portfolio >= breakpoint ~ "buy")) %>%
+  #group_by(month, portfolio) %>%
+  #summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag)) # Value weighted return by high or low grouped momentum values. 
 
 ### Turnover for new portfolio
 new_momentum = data_for_sorting %>%
   group_by(month) %>%
   mutate(
-    portfolio = assign_portfolio(
+    portfolio = assign_portfolio( #Calling function from 4) to create 2 portfolios
     data = cur_data(), #use current set, i.e. assign_portfolios
       var = momentum,
       n_portfolios = 2
     ),
     portfolio = as.factor(portfolio)
   )
-  
-lag_guys <- new_momentum %>%
+
+#Creating a 1 month lag of the portfolio column so that we can compare from month to month  
+lag_guys <- new_momentum %>% 
   mutate(month = month %m+% months(1)) %>%
   select(permno, month, portfolio_lag = portfolio) %>%
   drop_na()
 
+#Merging the lagged portfolio and calculate number of monthly trades
 all_guys <- new_momentum %>%
   left_join(lag_guys, c("permno","month")) %>%
   drop_na() %>%
   select(permno, month, portfolio, portfolio_lag) %>%
   mutate(traded = ifelse(portfolio==portfolio_lag, 1, 0)) %>%
   group_by(month) %>%
-  summarise(count_traded = sum(traded == 0) * 2) #CHECK THIS
+  summarise(count_traded = sum(traded == 0) * 2) #CHECK THIS - we multiply number of trades by 2 because every transaction involves both buying and selling or selling and buying at the same time
 
-cheaperportfolio %>% 
-  pivot_wider(names_from = portfolio, values_from = excess_ret) %>%
-  mutate(high_low = buy - sell) %>% 
-  left_join(factors_ff_monthly, by = "month") %>%
-  lm(high_low ~ mkt_excess, data = .) %>% broom::tidy()
+#We dont use these lines for anything right now
+#cheaperportfolio %>% 
+  #pivot_wider(names_from = portfolio, values_from = excess_ret) %>%
+  #mutate(high_low = buy - sell) %>% 
+  #left_join(factors_ff_monthly, by = "month") %>%
+  #lm(high_low ~ mkt_excess, data = .) %>% broom::tidy()
 
 ### Turnover for old portfolio
 old_momentum = data_for_sorting %>%
   group_by(month) %>%
   mutate(
-    portfolio = assign_portfolio(
+    portfolio = assign_portfolio( #Calling function from 4) to generate 10 portfolios
     data = cur_data(), #use current set, i.e. assign_portfolios
       var = momentum,
       n_portfolios = 10
     ),
     portfolio = as.factor(portfolio))
 
+#Creating a 1 month lag of the portfolio column so that we can compare from month to month 
 lag_guys_old <- old_momentum %>%
   mutate(month = month %m+% months(1)) %>%
   select(permno, month, portfolio_lag = portfolio) %>%
   drop_na()
 
+#Merging the lagged portfolio and calculate number of monthly trades
 all_guys_old <- old_momentum %>%
   left_join(lag_guys_old, c("permno","month")) %>%
   drop_na() %>%
@@ -456,7 +462,7 @@ all_guys_old <- old_momentum %>%
   mutate_all(~replace(., is.na(.), "NA")) %>%
   mutate(traded = ifelse(portfolio==portfolio_lag, 1, 0)) %>%
   group_by(month) %>%
-  summarise(count_traded = sum(traded == 0)) #CHECK THIS TOO
+  summarise(count_traded = sum(traded == 0)) #CHECK THIS - we dont multiply by 2 because we assume just one trade per transaction, i.e. no stock goes from pf 10 to 1 or from 1 to 10 in one month
 ```
 
 
