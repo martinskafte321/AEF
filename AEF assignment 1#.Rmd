@@ -489,9 +489,6 @@ mom %>%
   mutate(sharpe = excess_ret/sd) %>%
   summarise(sharpe = mean(sharpe), ret_excess = mean(excess_ret), sd = mean(sd))
 
-
-
-
 ```
 
 
