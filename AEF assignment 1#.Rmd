@@ -33,11 +33,11 @@ library(furrr)
 # ******************************************
 
 #Connecting to the database
-tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
-                          extended_types = TRUE)
+#tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
+ #                         extended_types = TRUE)
 
-#tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
-                          #extended_types = TRUE)
+tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
+                          extended_types = TRUE)
 
 #Reading in crsp_monthly dataset
 crsp_monthly <- tbl(tidy_finance, "crsp_monthly") %>%
@@ -52,7 +52,7 @@ factors_ff_monthly <- tbl(tidy_finance, "factors_ff_monthly") %>%
 #Merging crsp_monthly and factors_ff_monthly through a left-join, merging by the common "month" column 
 crsp_monthly <- crsp_monthly %>%
   left_join(factors_ff_monthly, by = "month") %>%
-  select(permno, month, ret_excess, mkt_excess, mktcap,mktcap_lag) #selecting these columns from our joint set
+  select(permno, month, ret, rf, ret_excess, mkt_excess, mktcap,mktcap_lag) #selecting these columns from our joint set
 
 
 dbListTables(tidy_finance) # check the database
@@ -147,7 +147,7 @@ As the mean of returns is non-constant, it does not fluctuate around a constant 
 ```{r}
 ret_excess_lag %>%
   select(month, ret_excess_lag) %>%
-pacf(month, ret_excess_lag)
+pacf(ret_excess_lag)
 
 pacf(ret_excess_lag[ret_excess_lag])
 ```
@@ -419,96 +419,9 @@ When a given portfolio selection is based on i.e., past year market cap momentum
 
 A portfolio that would capture a momentum effect but at the same time deliver lower trading costs, compared to the portfolio in 4, can be a portfolio with broader specifications of momentum. Instead of buying the upper 10th quantile of momentum and selling the 1st quantile, we buy the assets with a momentum above the median and sell those below the median. The idea is that this will result in a lower turnover, as assets enter and exit the buy and sell parts of the portfolio less frequently. 
 
-```{r}
-#We dont use these lines for anything right now 
-#cheaperportfolio = momentum_portfolios %>% 
-  #mutate(portfolio = as.numeric(portfolio)) %>%
-  #group_by(month) %>%
-  #mutate(breakpoint = 5,
-     #portfolio = case_when(portfolio <= breakpoint ~ "sell",
-                               #portfolio >= breakpoint ~ "buy")) %>%
-  #group_by(month, portfolio) %>%
-  #summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag)) # Value weighted return by high or low grouped momentum values. 
-
-### Turnover for new portfolio
-new_momentum = data_for_sorting %>%
-  group_by(month) %>%
-  mutate(
-    portfolio = assign_portfolio( #Calling function from 4) to create 2 portfolios
-    data = cur_data(), #use current set, i.e. assign_portfolios
-      var = momentum,
-      n_portfolios = 4
-    ),
-    portfolio = as.factor(portfolio)
-  )
-
-#Creating a 1 month lag of the portfolio column so that we can compare from month to month  
-lag_guys <- new_momentum %>% 
-  mutate(month = month %m+% months(1)) %>%
-  select(permno, month, portfolio_lag = portfolio) %>%
-  drop_na()
-lag_guys
-
-#Merging the lagged portfolio and calculate number of monthly trades
-all_guys <- new_momentum %>%
-  left_join(lag_guys, c("permno","month")) %>%
-  drop_na() %>%
-  mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
-  select(permno, month, portfolio, portfolio_lag) %>%
-  group_by(month) %>%
-  mutate(trade = if (portfolio==1 && portfolio_lag ==2) {
-                    1
-                  } else if ( portfolio==1 && portfolio_lag ==3) {
-                1
-                  } else if ( portfolio==1 && portfolio_lag ==4) {
-                2
-                } else if ( portfolio==2 && portfolio_lag ==1) {
-                1
-                  } else if ( portfolio==2 && portfolio_lag ==4) {
-                1
-                  }
-                else if ( portfolio==3 && portfolio_lag ==1) {
-                1
-                  } else if ( portfolio==3 && portfolio_lag ==4) {
-                1
-                } else if ( portfolio==4 && portfolio_lag ==1) {
-                2
-                  } else if ( portfolio==4 && portfolio_lag ==2) {
-                1
-                  }
-                else if ( portfolio==4 && portfolio_lag ==3) {
-                1
-                } else 0
-         ) %>%
-  group_by(month) %>%
-  summarise(count_traded = sum(trade != 0)) #CHECK THIS - we multiply number of trades by 2 because every transaction involves both buying and selling or selling and buying at the same time
-
-count_doubletrades <- new_momentum %>%
-  left_join(lag_guys, c("permno","month")) %>%
-  drop_na() %>%
-  select(permno, month, portfolio, portfolio_lag) %>%
-  group_by(month) %>%
-  mutate(trade = if (portfolio==1 && portfolio_lag ==4) {
-                    1
-                  } else if ( portfolio==4 && portfolio_lag ==1) {
-                1
-                } else 0) %>%
-  summarise(count_doubles = sum(trade == 1)) %>%
-  summarise(total = sum(count_doubles)) #We see that there is no observation in the entire data set where we have a stock going through 2 transactions from one month to the next (from 1 to 4 or 4 to 1)
-
-#We dont use these lines for anything right now
-#cheaperportfolio %>% 
-  #pivot_wider(names_from = portfolio, values_from = excess_ret) %>%
-  #mutate(high_low = buy - sell) %>% 
-  #left_join(factors_ff_monthly, by = "month") %>%
-  #lm(high_low ~ mkt_excess, data = .) %>% broom::tidy()
-
-
-# Den her portefølje har vi allerede lavet. Den hedder momentum_portfolios
-#######################################
-
+```{r, message=FALSE}
 ### Turnover for old portfolio
-old_momentum = data_for_sorting %>%
+momentum = data_for_sorting %>%
   group_by(month) %>%
   mutate(
     portfolio = assign_portfolio( #Calling function from 4) to generate 10 portfolios
@@ -521,14 +434,16 @@ old_momentum = data_for_sorting %>%
 ###########################################
 
 #Creating a 1 month lag of the portfolio column so that we can compare from month to month 
-lag_guys_old <- old_momentum %>%
+lagged_momentum <- old_momentum %>%
   mutate(month = month %m+% months(1)) %>%
   select(permno, month, portfolio_lag = portfolio) %>%
   drop_na()
 
+
+
 #Merging the lagged portfolio and calculate number of monthly trades
-all_guys_old <- old_momentum %>%
-  left_join(lag_guys_old, c("permno","month")) %>%
+all_guys_old <- momentum %>%
+  left_join(lagged_momentum, c("permno","month")) %>%
   drop_na() %>%
   mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
   group_by(month) %>%
@@ -541,6 +456,42 @@ all_guys_old <- old_momentum %>%
   mutate(traded = ifelse(portfolio==portfolio_lag, 0, 1)) %>%
   group_by(month) %>%
   summarise(count_traded = sum(traded == 1)) #CHECK THIS - we dont multiply by 2 because we assume just one trade per transaction, i.e. no stock goes from pf 10 to 1 or from 1 to 10 in one month
+
+all_guys_new <- momentum %>%
+  left_join(lagged_momentum, c("permno","month")) %>%
+  drop_na() %>%
+  mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
+  group_by(month) %>%
+  mutate(breakpoint_high = 10,
+         portfolio = case_when(portfolio >= breakpoint_high ~ "high"),
+         portfolio_lag = case_when(portfolio_lag >= breakpoint_high ~ "high")) %>%
+  select(permno, month, portfolio, portfolio_lag) %>%
+  mutate_all(~replace(., is.na(.), "NA")) %>%
+  mutate(traded = ifelse(portfolio==portfolio_lag, 0, 1)) %>%
+  group_by(month) %>%
+  summarise(count_traded = sum(traded == 1)) #CHECK THIS - we dont multiply by 2 because we assume just one trade per transaction, i.e. no stock goes from pf 10 to 1 or from 1 to 10 in one month
+
+
+mom= momentum %>%
+  left_join(lagged_momentum, c("permno","month")) %>%
+  drop_na() %>%
+  mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
+  group_by(month) %>%
+  mutate(breakpoint_high = 10,
+         portfolio = case_when(portfolio >= breakpoint_high ~ "high")) %>% 
+  select(permno, month, ret, mktcap_lag, ret_excess, portfolio) %>%
+  filter(portfolio=='high') 
+
+
+mom %>%
+  group_by(month) %>%
+  summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag), sd = sd(ret_excess), .groups = "drop") %>%
+  mutate(sharpe = excess_ret/sd) %>%
+  summarise(sharpe = mean(sharpe), ret_excess = mean(excess_ret), sd = mean(sd))
+
+
+
+
 ```
 
 
