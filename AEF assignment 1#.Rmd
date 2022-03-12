@@ -33,11 +33,11 @@ library(furrr)
 # ******************************************
 
 #Connecting to the database
-#tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
-#                          extended_types = TRUE)
-
-tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
+tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
                           extended_types = TRUE)
+
+#tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
+                          #extended_types = TRUE)
 
 #Reading in crsp_monthly dataset
 crsp_monthly <- tbl(tidy_finance, "crsp_monthly") %>%
@@ -447,11 +447,13 @@ lag_guys <- new_momentum %>%
   mutate(month = month %m+% months(1)) %>%
   select(permno, month, portfolio_lag = portfolio) %>%
   drop_na()
+lag_guys
 
 #Merging the lagged portfolio and calculate number of monthly trades
 all_guys <- new_momentum %>%
   left_join(lag_guys, c("permno","month")) %>%
   drop_na() %>%
+  mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
   select(permno, month, portfolio, portfolio_lag) %>%
   group_by(month) %>%
   mutate(trade = if (portfolio==1 && portfolio_lag ==2) {
@@ -477,10 +479,22 @@ all_guys <- new_momentum %>%
                 else if ( portfolio==4 && portfolio_lag ==3) {
                 1
                 } else 0
-         ) 
-all_guys %>% 
+         ) %>%
   group_by(month) %>%
-  summarise(count_traded = sum(trade == 1)) #CHECK THIS - we multiply number of trades by 2 because every transaction involves both buying and selling or selling and buying at the same time
+  summarise(count_traded = sum(trade != 0)) #CHECK THIS - we multiply number of trades by 2 because every transaction involves both buying and selling or selling and buying at the same time
+
+count_doubletrades <- new_momentum %>%
+  left_join(lag_guys, c("permno","month")) %>%
+  drop_na() %>%
+  select(permno, month, portfolio, portfolio_lag) %>%
+  group_by(month) %>%
+  mutate(trade = if (portfolio==1 && portfolio_lag ==4) {
+                    1
+                  } else if ( portfolio==4 && portfolio_lag ==1) {
+                1
+                } else 0) %>%
+  summarise(count_doubles = sum(trade == 1)) %>%
+  summarise(total = sum(count_doubles)) #We see that there is no observation in the entire data set where we have a stock going through 2 transactions from one month to the next (from 1 to 4 or 4 to 1)
 
 #We dont use these lines for anything right now
 #cheaperportfolio %>% 
