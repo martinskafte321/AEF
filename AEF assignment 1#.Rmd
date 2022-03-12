@@ -33,7 +33,10 @@ library(furrr)
 # ******************************************
 
 #Connecting to the database
-tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
+#tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
+#                          extended_types = TRUE)
+
+tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
                           extended_types = TRUE)
 
 #Reading in crsp_monthly dataset
@@ -114,9 +117,9 @@ If crsp_monthly contains implicitly missing values, this will cause a ret_excess
 
 # Generate ret_excess_lag
 ```{r}
-ret_excess_lag <- crsp_monthly %>%
+crsp_monthly %>%
   mutate(month = month %m+% months(1)) %>%
-  select(permno, month, ret_excess, ret_excess_lag) %>%
+  select(permno, month, ret_excess_lag = ret_excess) %>%
   drop_na()
 
 
@@ -360,6 +363,7 @@ data[i,"alpha"] = estimate$estimate[1]
 data[i,"k ahead"] = k[[i]]
 
 }
+data
 ```
 
 ```{r}
@@ -380,7 +384,7 @@ test %>%
 ### 6. Most academic studies ignore real world costs and other forms of slippage when examining factors, which is likely a larger issue for momentum due to its higher turnover. The concern is that momentum is so costly to trade that its return premium is diminished in the real world. 
 
 # First, based on your findings in 1. and 3., briefly explain why you think a momentum strategy could be costlier to trade than, say, a strategy based on size sorts.
-When a given portfolio selection is based on i.e., past year market cap momentum, then the composition of the portfolio would change frequently as this is based purely on the performance of the stocks. Basically, since the analysis is made purely on activity from the past 12 months the portfolio composition will change often. Compared to a beta selection strategy where the analysis is made from i.e., 20 or 30 year historic stock price data, then the estimate would change much less frequently. This dramatically increases the need for trading activity and thus transaction costs of the momentum strategy. And for the momentum strategy to be efficient, there will have to be frequent turnover, otherwise the strategy might not be able to catch it if a stock loses momentum after it's traded.  
+When a given portfolio selection is based on i.e., past year market cap momentum, then the composition of the portfolio would change frequently as this is based purely on the performance of the stock value. Basically, since the analysis is made purely on activity from the past 12 months the momentum-portfolio composition will change often, since the market value of public companies tend to change frequently. Compared to a beta selection strategy where the analysis is made from i.e., 20 or 30 year historic stock price data, then the estimate would change much less frequently. This dramatically increases the need for trading activity and thus transaction costs of the momentum strategy. And for the momentum strategy to be efficient, there will have to be frequent turnover, otherwise the strategy might not be able to catch it if a stock loses momentum after it's traded.  
 
 # Then, propose an alternative strategy that may be able to effectively capture the momentum premium but which at the same time delivers lower trading costs. Describe the strategy and implement it within the CRSP sample. Report the resulting Sharpe-ratio and average turnover and compare to the baseline momentum strategy from exercise 4.
 
@@ -404,7 +408,7 @@ new_momentum = data_for_sorting %>%
     portfolio = assign_portfolio( #Calling function from 4) to create 2 portfolios
     data = cur_data(), #use current set, i.e. assign_portfolios
       var = momentum,
-      n_portfolios = 2
+      n_portfolios = 4
     ),
     portfolio = as.factor(portfolio)
   )
@@ -420,9 +424,34 @@ all_guys <- new_momentum %>%
   left_join(lag_guys, c("permno","month")) %>%
   drop_na() %>%
   select(permno, month, portfolio, portfolio_lag) %>%
-  mutate(traded = ifelse(portfolio==portfolio_lag, 1, 0)) %>%
   group_by(month) %>%
-  summarise(count_traded = sum(traded == 0) * 2) #CHECK THIS - we multiply number of trades by 2 because every transaction involves both buying and selling or selling and buying at the same time
+  mutate(trade = if (portfolio==1 && portfolio_lag ==2) {
+                    1
+                  } else if ( portfolio==1 && portfolio_lag ==3) {
+                1
+                  } else if ( portfolio==1 && portfolio_lag ==4) {
+                2
+                } else if ( portfolio==2 && portfolio_lag ==1) {
+                1
+                  } else if ( portfolio==2 && portfolio_lag ==4) {
+                1
+                  }
+                else if ( portfolio==3 && portfolio_lag ==1) {
+                1
+                  } else if ( portfolio==3 && portfolio_lag ==4) {
+                1
+                } else if ( portfolio==4 && portfolio_lag ==1) {
+                2
+                  } else if ( portfolio==4 && portfolio_lag ==2) {
+                1
+                  }
+                else if ( portfolio==4 && portfolio_lag ==3) {
+                1
+                } else 0
+         ) 
+all_guys %>% 
+  group_by(month) %>%
+  summarise(count_traded = sum(trade == 1)) #CHECK THIS - we multiply number of trades by 2 because every transaction involves both buying and selling or selling and buying at the same time
 
 #We dont use these lines for anything right now
 #cheaperportfolio %>% 
@@ -430,6 +459,10 @@ all_guys <- new_momentum %>%
   #mutate(high_low = buy - sell) %>% 
   #left_join(factors_ff_monthly, by = "month") %>%
   #lm(high_low ~ mkt_excess, data = .) %>% broom::tidy()
+
+
+# Den her portefølje har vi allerede lavet. Den hedder momentum_portfolios
+#######################################
 
 ### Turnover for old portfolio
 old_momentum = data_for_sorting %>%
@@ -441,6 +474,8 @@ old_momentum = data_for_sorting %>%
       n_portfolios = 10
     ),
     portfolio = as.factor(portfolio))
+
+###########################################
 
 #Creating a 1 month lag of the portfolio column so that we can compare from month to month 
 lag_guys_old <- old_momentum %>%
@@ -460,9 +495,9 @@ all_guys_old <- old_momentum %>%
          portfolio_lag = case_when(portfolio_lag <= breakpoint_low ~ "low", portfolio_lag >= breakpoint_high ~ "high")) %>%
   select(permno, month, portfolio, portfolio_lag) %>%
   mutate_all(~replace(., is.na(.), "NA")) %>%
-  mutate(traded = ifelse(portfolio==portfolio_lag, 1, 0)) %>%
+  mutate(traded = ifelse(portfolio==portfolio_lag, 0, 1)) %>%
   group_by(month) %>%
-  summarise(count_traded = sum(traded == 0)) #CHECK THIS - we dont multiply by 2 because we assume just one trade per transaction, i.e. no stock goes from pf 10 to 1 or from 1 to 10 in one month
+  summarise(count_traded = sum(traded == 1)) #CHECK THIS - we dont multiply by 2 because we assume just one trade per transaction, i.e. no stock goes from pf 10 to 1 or from 1 to 10 in one month
 ```
 
 
