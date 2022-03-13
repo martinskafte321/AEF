@@ -38,11 +38,19 @@ library(ggpubr)
 # ******************************************
 
 #Connecting to the database
-#tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
- #                         extended_types = TRUE)
 
-tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
+#tidy_finance <- dbConnect(SQLite(), "/Users/fredlundahl/Desktop/AEF/data/tidy_finance.sqlite", 
+             #extended_types = TRUE)
+
+# tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
+                          # extended_types = TRUE)
+
+tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
                           extended_types = TRUE)
+
+
+#tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
+                          #extended_types = TRUE)
 
 #Reading in crsp_monthly dataset
 crsp_monthly <- tbl(tidy_finance, "crsp_monthly") %>%
@@ -120,6 +128,8 @@ Summary statistics for ret_excess and mktcap shows that the mean return per mont
 
 #### Generate a new column ret_excess_lag. Briefly state why crsp_monthly %>% group_by(permno) %>% mutate(ret_excess_lag = lag(ret_excess)) does not provide the correct result if crsp_monthly contains implicitly missing values. 
 
+# Briefly stating why the provided code gives incorrect results.
+
 If crsp_monthly contains implicitly missing values, this will cause a ret_excess_lag to not necessarily represent the value of the previous month, but the previous value in the dataset. An implicitly missing value then makes a ret_excess_lag value represent the second lagged value. 
 
 
@@ -138,11 +148,14 @@ ret_excess_lag <- crsp_monthly %>%
 ```
 
 
+
 #### Report suitable summary statistics or visualizations that show if returns rt and rt−1 exhibit autocorrelation that is significantly different from zero. What do your results imply? Is there short-term momentum?
+
+# Investigating potential autocorrelation in ret_excess_lag. 
+
 
 ```{r}
 crsp_monthly %>%
-  drop_na() %>%
   ggplot(aes(x = month, y = ret_excess_lag)) +
   geom_line() +
   labs(
@@ -163,8 +176,14 @@ As the mean of returns is non-constant, it does not fluctuate around a constant 
 ```{r}
 crsp_monthly %>%
   drop_na() %>%
+
   select(ret_excess_lag) %>%
   pacf()
+
+
+  factor(ret_excess_lag) %>%
+  as.numeric(ret_excess_lag) %>%
+  pacf(ret_excess_lag)
 
 ```
 The PACF plot clearly shows that there is a significant relationship between $r_t$ and $r_{t-1}$. 
@@ -226,7 +245,7 @@ mom_stat = data_for_sorting %>%
 #### Then, report the time-series means for each cross-sectional value. What is the mean value of $Mom_{i,t}$ in the average month? What is the cross-sectional standard deviation? 
 
 ```{r}
-#Summarise the previously created montly summary statistics into one row by taking the mean in each column
+# Summarise the previously created montly summary statistics into one row by taking the mean in each column
 mom_stat %>% 
   summarise(across(-month,mean)) 
 
@@ -452,23 +471,46 @@ remove(k,i,estimate,data, lag_excess_ret)
 ### 6. Most academic studies ignore real world costs and other forms of slippage when examining factors, which is likely a larger issue for momentum due to its higher turnover. The concern is that momentum is so costly to trade that its return premium is diminished in the real world. 
 
 # First, based on your findings in 1. and 3., briefly explain why you think a momentum strategy could be costlier to trade than, say, a strategy based on size sorts.
-When a given portfolio selection is based on i.e., past year market cap momentum, then the composition of the portfolio would change frequently as this is based purely on the performance of the stock value. Basically, since the analysis is made purely on activity from the past 12 months the momentum-portfolio composition will change often, since the market value of public companies tend to change frequently. Compared to a beta selection strategy where the analysis is made from i.e., 20 or 30 year historic stock price data, then the estimate would change much less frequently. This dramatically increases the need for trading activity and thus transaction costs of the momentum strategy. And for the momentum strategy to be efficient, there will have to be frequent turnover, otherwise the strategy might not be able to catch it if a stock loses momentum after it's traded.  
+When a given portfolio selection is based on i.e., past year market cap momentum, then the composition of the portfolio would change frequently as this is based purely on the performance of the stock value. Basically, since the analysis is made purely on activity from the past 12 months the momentum-portfolio composition will change often, since the market value of public companies tend to change frequently. Compared to a beta selection strategy where the analysis is made from i.e., 20 or 30 year historic stock price data, then the estimate would change much less frequently. This dramatically increases the need for trading activity and thus transaction costs of the momentum strategy. For the momentum strategy to be efficient, there will have to be frequent turnover, otherwise the strategy might not be able to catch it if a stock loses momentum after it's traded.  
 
-# Then, propose an alternative strategy that may be able to effectively capture the momentum premium but which at the same time delivers lower trading costs. Describe the strategy and implement it within the CRSP sample. Report the resulting Sharpe-ratio and average turnover and compare to the baseline momentum strategy from exercise 4.
+# Then, propose an alternative strategy that may be able to effectively capture the momentum premium but which at the same time delivers lower trading costs. Describe the strategy and implement it within the CRSP sample. 
 
-A portfolio that would capture a momentum effect but at the same time deliver lower trading costs, compared to the portfolio in 4, can be a portfolio with broader specifications of momentum. Instead of buying the upper 10th quantile of momentum and selling the 1st quantile, we buy the assets with a momentum above the median and sell those below the median. The idea is that this will result in a lower turnover, as assets enter and exit the buy and sell parts of the portfolio less frequently. 
+A portfolio that would capture a momentum effect but at the same time deliver lower trading costs, compared to the portfolio in 4, can be a portfolio with a strict no-short selling condition. Instead of buying the upper 10th quantile of momentum and selling the 1st quantile, we strictly go long in the upper 10th quantile. The idea is that this will result in a lower turnover, as assets enter and exit the portfolio less frequently. 
 
 ```{r, message=FALSE}
+
 #Creating a 1 month lag of the portfolio column so that we can compare from month to month 
 lagged_momentum <- momentum_portfolios %>%
+
+### Turnover for old portfolio
+momentum = data_for_sorting %>%
+  group_by(month) %>%
+  mutate(
+    portfolio = assign_portfolio( #Calling function from 4) to generate 10 portfolios
+    data = cur_data(), #use current set, i.e. data_for_sorting
+      var = momentum,
+      n_portfolios = 10
+    ),
+    portfolio = as.factor(portfolio))
+
+###########################################
+
+#Creating a 1 month lag of the portfolio column so that we can compare from month to month 
+lagged_momentum <- momentum %>%
+
   mutate(month = month %m+% months(1)) %>%
   select(permno, month, portfolio_lag = portfolio) %>%
   drop_na()
 
 
 
+
 #Merging the lagged portfolio and calculate number of monthly trades
 all_guys_old <- momentum_portfolios %>%
+
+#Merging the lagged portfolio and calculate number of monthly trades for the old strategy
+trades_old <- momentum %>%
+
   left_join(lagged_momentum, c("permno","month")) %>%
   drop_na() %>%
   mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
@@ -479,11 +521,16 @@ all_guys_old <- momentum_portfolios %>%
          portfolio_lag = case_when(portfolio_lag <= breakpoint_low ~ "low", portfolio_lag >= breakpoint_high ~ "high")) %>%
   select(permno, month, portfolio, portfolio_lag) %>%
   mutate_all(~replace(., is.na(.), "NA")) %>%
-  mutate(traded = ifelse(portfolio==portfolio_lag, 0, 1)) %>%
+  mutate(traded = ifelse(portfolio==portfolio_lag, 0, 1)) %>% #counts 1 every time a stock moves between pf's 
   group_by(month) %>%
-  summarise(count_traded = sum(traded == 1)) #CHECK THIS - we dont multiply by 2 because we assume just one trade per transaction, i.e. no stock goes from pf 10 to 1 or from 1 to 10 in one month
+  summarise(count_traded = sum(traded == 1)) #summarizing total monthly transactions - we dont multiply by 2 because we assume just one trade per transaction, i.e. no stock goes from pf 10 to 1 or from 1 to 10 in one month
+
 
 all_guys_new <- momentum_portfolios %>%
+
+#Merging the lagged portfolio and calculate number of monthly trades for the new strategy (no short-selling)
+trades_new <- momentum %>%
+
   left_join(lagged_momentum, c("permno","month")) %>%
   drop_na() %>%
   mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
@@ -493,12 +540,34 @@ all_guys_new <- momentum_portfolios %>%
          portfolio_lag = case_when(portfolio_lag >= breakpoint_high ~ "high")) %>%
   select(permno, month, portfolio, portfolio_lag) %>%
   mutate_all(~replace(., is.na(.), "NA")) %>%
-  mutate(traded = ifelse(portfolio==portfolio_lag, 0, 1)) %>%
+  mutate(traded = ifelse(portfolio==portfolio_lag, 0, 1)) %>% #counts 1 every time a stock moves between pf's 
   group_by(month) %>%
-  summarise(count_traded = sum(traded == 1)) #CHECK THIS - we dont multiply by 2 because we assume just one trade per transaction, i.e. no stock goes from pf 10 to 1 or from 1 to 10 in one month
+  summarise(count_traded = sum(traded == 1)) #summarizing total monthly transactions
+```
 
+#Report the resulting Sharpe-ratio and average turnover and compare to the baseline momentum strategy from exercise 4.
+Her skal værdierne stå når vi er klar:
+```{r, message=FALSE}
+#Finding sharpe ratio of the baseline portfolio
+sharpe_old = momentum_portfolios %>% 
+  mutate(portfolio = as.numeric(portfolio)) %>%
+  group_by(month) %>%
+  mutate(breakpoint_low = 1,
+         breakpoint_high = 10,
+         portfolio = case_when(portfolio <= breakpoint_low ~ "low",
+                               portfolio >= breakpoint_high ~ "high")) %>%
+  filter(str_detect(portfolio, 'high|low')) %>% #removes all NA rows, i.e. observations that are not part of the portfolio
+  group_by(month) %>% 
+  mutate(ret_excess = if (portfolio == 'low'){
+    ret_excess * (-1)
+  } else ret_excess) %>% #flips the sign of excess return for all stocks subject to short-selling
+  summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag), sd = sd(ret_excess), .groups = "drop") %>%
+  mutate(sharpe = excess_ret/sd) %>%
+  summarise(sharpe = mean(sharpe), excess_ret = mean(excess_ret), sd = mean(sd))
 
 mom= momentum_portfolios %>%
+#Finding sharpe ratio of the new portfolio with no short-selling
+sharpe_new = momentum %>%
   left_join(lagged_momentum, c("permno","month")) %>%
   drop_na() %>%
   mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
@@ -506,10 +575,7 @@ mom= momentum_portfolios %>%
   mutate(breakpoint_high = 10,
          portfolio = case_when(portfolio >= breakpoint_high ~ "high")) %>% 
   select(permno, month, ret, mktcap_lag, ret_excess, portfolio) %>%
-  filter(portfolio=='high') 
-
-
-mom %>%
+  filter(portfolio=='high') %>% #removes all observations that are not part of the portfolio
   group_by(month) %>%
   summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag), sd = sd(ret_excess), .groups = "drop") %>%
   mutate(sharpe = excess_ret/sd) %>%
