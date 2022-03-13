@@ -27,6 +27,7 @@ library(slider)
 library(furrr)
 library(ggplot2)
 library(ggpubr)
+library(kableExtra)
 
 ```
 
@@ -42,11 +43,11 @@ library(ggpubr)
 #tidy_finance <- dbConnect(SQLite(), "/Users/fredlundahl/Desktop/AEF/data/tidy_finance.sqlite", 
              #extended_types = TRUE)
 
-# tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
-                          # extended_types = TRUE)
+ tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
+                           extended_types = TRUE)
 
-tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
-                          extended_types = TRUE)
+#tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
+ #                         extended_types = TRUE)
 
 
 #tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
@@ -118,7 +119,7 @@ mkt = crsp_monthly %>%
 #Merging the summary statistics so that they are presented for both excess returns and market cap
 ret %>% 
   cbind(mkt) %>%
-  select(-n)
+  select(-n) %>% pander::pander()
 
 remove(ret,mkt) #Removing these variables to get a cleaner environment. 
 ```
@@ -142,7 +143,8 @@ ret_excess_lag <- crsp_monthly %>%
   
   crsp_monthly <- crsp_monthly %>%
     left_join(ret_excess_lag, by = c("permno", "month"))
-  crsp_monthly
+  
+  crsp_monthly %>% head()
   
   remove(ret_excess_lag)
 ```
@@ -151,7 +153,7 @@ ret_excess_lag <- crsp_monthly %>%
 
 #### Report suitable summary statistics or visualizations that show if returns rt and rt−1 exhibit autocorrelation that is significantly different from zero. What do your results imply? Is there short-term momentum?
 
-# Investigating potential autocorrelation in ret_excess_lag. 
+
 
 
 ```{r}
@@ -169,21 +171,15 @@ crsp_monthly %>%
   mutate(ret_lag = lag(ret)) %>%
   drop_na() %>%
   select(ret,ret_lag) %>%
-  cor()
+  cor() %>% pander::pander()
 ```
 As the mean of returns is non-constant, it does not fluctuate around a constant value, returns suffer from autocorrelation. Furthermore, there is a negative correlation between $r_t$ and $r_{t-1}$. 
 
 ```{r}
 crsp_monthly %>%
   drop_na() %>%
-
   select(ret_excess_lag) %>%
   pacf()
-
-
-  factor(ret_excess_lag) %>%
-  as.numeric(ret_excess_lag) %>%
-  pacf(ret_excess_lag)
 
 ```
 The PACF plot clearly shows that there is a significant relationship between $r_t$ and $r_{t-1}$. 
@@ -247,7 +243,7 @@ mom_stat = data_for_sorting %>%
 ```{r}
 # Summarise the previously created montly summary statistics into one row by taking the mean in each column
 mom_stat %>% 
-  summarise(across(-month,mean)) 
+  summarise(across(-month,mean)) %>% pander::pander()
 
 remove(mom_stat)
 ```
@@ -258,7 +254,7 @@ remove(mom_stat)
 data_for_sorting %>%
   mutate(log_mktcap = log(mktcap)) %>%
   select(momentum,log_mktcap) %>%
-  cor()
+  cor() %>% pander::pander()
 ```
 
 Yes, there is a positive correlation coefficient of 0.067 between the momentum value and log of market capitalization. 
@@ -339,7 +335,8 @@ mom_portfolios_summary = momentum_portfolios %>%
     alpha = as.numeric(lm(excess_ret ~ 1 + mkt_excess)$coefficients[1]),
     beta = as.numeric(lm(excess_ret ~ 1 + mkt_excess)$coefficients[2]),
     excess_ret = mean(excess_ret)
-  ) %>% head(10)
+  )
+mom_portfolios_summary
 
 # The function first summarizes the excess return by portfolio and month on which it joins the factors_ff_monthly on month to get the mkt_excess. Then creating linear regressions to get alpha and beta values summarized on portfolio sort. 
 ```
@@ -379,7 +376,7 @@ The plot indicates that the higher the momentum of a portfolio, the higher is th
 
 # Finally, analyse the momentum strategy: a portfolio that goes long past winners (the highest decile) and short past losers (the lowest decile).
 ```{r}
-strategy_portfolio = momentum_portfolios %>% 
+strategy_portfolio_original = momentum_portfolios %>% 
   mutate(portfolio = as.numeric(portfolio)) %>%
   group_by(month) %>%
   mutate(breakpoint_low = 1,
@@ -390,14 +387,14 @@ strategy_portfolio = momentum_portfolios %>%
   group_by(month,portfolio) %>%
   summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag)) # Value weighted return by high or low grouped momentum values. 
 
-strategy_portfolio %>% 
+strategy_portfolio_original %>% 
   pivot_wider(names_from = portfolio, values_from = excess_ret) %>%
   mutate(high_low = high - low) %>% # subtracting the low-portfolio alpha, hoping that this will be negative and increase the alpha of the strategy. 
   left_join(factors_ff_monthly, by = "month") %>%
   lm(high_low ~ 1 + mkt_excess, data = .) %>% broom::tidy() 
 # Again a linear regression of the high-low strategy on market excess return to get the alpha. 
 
-remove(strategy_portfolio)
+remove(strategy_portfolio_original)
 ```
 
 # What do you conclude about the performance of the momentum strategy? Is the strategy market neutral (i.e., does it exhibit a market beta which is zero)? Does the strategy deliver abnormal excess returns (i.e., a positive alpha)?
@@ -410,7 +407,7 @@ The strategy is not market neutral as the beta is -0.45.
 #### One of the main conclusions in the momentum literature is that the timing of the measurement of momentum plays a substantial role in the nature of the relation between momentum and future stock returns. To assess this in more detail and to examine whether momentum has the ability to predict returns further in the future than the next month, repeat the univariate portfolio sorts but this time using the k-month-ahead excess return as the outcome variable for values of k ∈{1, 3, 6, 12}.
 
 #### For which time-horizon does the momentum deliver the highest risk-adjusted performance?
-The momentum strategy delivers the highest risk-adjusted excess return with a 1-month ahead horizon. 
+The momentum strategy delivers the highest risk-adjusted excess return with a 1-month ahead horizon. The 0-month ahead is included as a verification of the method, as this is the same number as earlier reported. 
 
 ```{r}
 
@@ -442,7 +439,7 @@ estimate = strategy_portfolio %>%
 
 ```{r}
 # Values to use in loop:
-k = c(1,3,6,12)
+k = c(0,1,3,6,12)
 data = matrix(nrow=length(k),ncol = 2)
 colnames(data) <- c("k ahead", "alpha")
 
@@ -462,8 +459,8 @@ data[i,"k ahead"] = k[[i]]
 
 }
 
-data %>% kableExtra::kable()
-remove(k,i,estimate,data, lag_excess_ret)
+data %>% pander::pander()
+remove(k,i,estimate,data, lag_excess_ret, assign_portfolio, portfolio, strategy_portfolio)
 ```
 
  
@@ -479,38 +476,14 @@ A portfolio that would capture a momentum effect but at the same time deliver lo
 
 ```{r, message=FALSE}
 
-#Creating a 1 month lag of the portfolio column so that we can compare from month to month 
+#Creating a 1 month lag of the portfolio column so that we can compare from month to month. 'momentum_portfolios' is the portfolio sorts from earlier. 
 lagged_momentum <- momentum_portfolios %>%
-
-### Turnover for old portfolio
-momentum = data_for_sorting %>%
-  group_by(month) %>%
-  mutate(
-    portfolio = assign_portfolio( #Calling function from 4) to generate 10 portfolios
-    data = cur_data(), #use current set, i.e. data_for_sorting
-      var = momentum,
-      n_portfolios = 10
-    ),
-    portfolio = as.factor(portfolio))
-
-###########################################
-
-#Creating a 1 month lag of the portfolio column so that we can compare from month to month 
-lagged_momentum <- momentum %>%
-
   mutate(month = month %m+% months(1)) %>%
   select(permno, month, portfolio_lag = portfolio) %>%
   drop_na()
 
-
-
-
-#Merging the lagged portfolio and calculate number of monthly trades
-all_guys_old <- momentum_portfolios %>%
-
 #Merging the lagged portfolio and calculate number of monthly trades for the old strategy
-trades_old <- momentum %>%
-
+trades_old <- momentum_portfolios %>%
   left_join(lagged_momentum, c("permno","month")) %>%
   drop_na() %>%
   mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
