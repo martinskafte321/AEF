@@ -33,11 +33,11 @@ library(furrr)
 # ******************************************
 
 #Connecting to the database
-#tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
- #                         extended_types = TRUE)
-
-tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
+tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
                           extended_types = TRUE)
+
+#tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
+                          #extended_types = TRUE)
 
 #Reading in crsp_monthly dataset
 crsp_monthly <- tbl(tidy_finance, "crsp_monthly") %>%
@@ -434,12 +434,10 @@ momentum = data_for_sorting %>%
 ###########################################
 
 #Creating a 1 month lag of the portfolio column so that we can compare from month to month 
-lagged_momentum <- old_momentum %>%
+lagged_momentum <- momentum %>%
   mutate(month = month %m+% months(1)) %>%
   select(permno, month, portfolio_lag = portfolio) %>%
   drop_na()
-
-
 
 #Merging the lagged portfolio and calculate number of monthly trades
 all_guys_old <- momentum %>%
@@ -471,8 +469,24 @@ all_guys_new <- momentum %>%
   group_by(month) %>%
   summarise(count_traded = sum(traded == 1)) #CHECK THIS - we dont multiply by 2 because we assume just one trade per transaction, i.e. no stock goes from pf 10 to 1 or from 1 to 10 in one month
 
+#This bitch - vi skal have fundet en måde at lave et invert af ex_ret for alle rækker med 'low', ellers bliver ex_ret forkert
+old_mom = momentum %>%
+  left_join(lagged_momentum, c("permno","month")) %>%
+  drop_na() %>%
+  mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
+  group_by(month) %>%
+  mutate(breakpoint_low = 1,
+         breakpoint_high = 10,
+         portfolio = case_when(portfolio <= breakpoint_low ~ "low", 
+                               portfolio >= breakpoint_high ~ "high")) %>%
+  select(permno, month, ret, mktcap_lag, ret_excess, portfolio) %>%
+  filter(str_detect(portfolio, 'high|low')) %>%
+  group_by(month) %>% #efter dette skal det implementeres --> high_low fra opg 4 kan jeg ikke få til at fungere.
+  summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag), sd = sd(ret_excess), .groups = "drop") %>%
+  mutate(sharpe = excess_ret/sd) %>%
+  summarise(sharpe = mean(sharpe), ret_excess = mean(excess_ret), sd = mean(sd))
 
-mom= momentum %>%
+new_mom = momentum %>%
   left_join(lagged_momentum, c("permno","month")) %>%
   drop_na() %>%
   mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
@@ -480,10 +494,7 @@ mom= momentum %>%
   mutate(breakpoint_high = 10,
          portfolio = case_when(portfolio >= breakpoint_high ~ "high")) %>% 
   select(permno, month, ret, mktcap_lag, ret_excess, portfolio) %>%
-  filter(portfolio=='high') 
-
-
-mom %>%
+  filter(portfolio=='high') %>%
   group_by(month) %>%
   summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag), sd = sd(ret_excess), .groups = "drop") %>%
   mutate(sharpe = excess_ret/sd) %>%
