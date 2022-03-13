@@ -34,14 +34,14 @@ library(furrr)
 
 #Connecting to the database
 
-tidy_finance <- dbConnect(SQLite(), "/Users/fredlundahl/Desktop/AEF/data/tidy_finance.sqlite", 
-             extended_types = TRUE)
+#tidy_finance <- dbConnect(SQLite(), "/Users/fredlundahl/Desktop/AEF/data/tidy_finance.sqlite", 
+             #extended_types = TRUE)
 
 # tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
                           # extended_types = TRUE)
 
-# tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
-                        #  extended_types = TRUE)
+tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
+                          extended_types = TRUE)
 # >>>>>>> 1c14b8140aaa911071766c7449682272a7dc0531:AEF_assignment1.Rmd
 
 #tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
@@ -419,11 +419,11 @@ test %>%
 ### 6. Most academic studies ignore real world costs and other forms of slippage when examining factors, which is likely a larger issue for momentum due to its higher turnover. The concern is that momentum is so costly to trade that its return premium is diminished in the real world. 
 
 # First, based on your findings in 1. and 3., briefly explain why you think a momentum strategy could be costlier to trade than, say, a strategy based on size sorts.
-When a given portfolio selection is based on i.e., past year market cap momentum, then the composition of the portfolio would change frequently as this is based purely on the performance of the stock value. Basically, since the analysis is made purely on activity from the past 12 months the momentum-portfolio composition will change often, since the market value of public companies tend to change frequently. Compared to a beta selection strategy where the analysis is made from i.e., 20 or 30 year historic stock price data, then the estimate would change much less frequently. This dramatically increases the need for trading activity and thus transaction costs of the momentum strategy. And for the momentum strategy to be efficient, there will have to be frequent turnover, otherwise the strategy might not be able to catch it if a stock loses momentum after it's traded.  
+When a given portfolio selection is based on i.e., past year market cap momentum, then the composition of the portfolio would change frequently as this is based purely on the performance of the stock value. Basically, since the analysis is made purely on activity from the past 12 months the momentum-portfolio composition will change often, since the market value of public companies tend to change frequently. Compared to a beta selection strategy where the analysis is made from i.e., 20 or 30 year historic stock price data, then the estimate would change much less frequently. This dramatically increases the need for trading activity and thus transaction costs of the momentum strategy. For the momentum strategy to be efficient, there will have to be frequent turnover, otherwise the strategy might not be able to catch it if a stock loses momentum after it's traded.  
 
-# Then, propose an alternative strategy that may be able to effectively capture the momentum premium but which at the same time delivers lower trading costs. Describe the strategy and implement it within the CRSP sample. Report the resulting Sharpe-ratio and average turnover and compare to the baseline momentum strategy from exercise 4.
+# Then, propose an alternative strategy that may be able to effectively capture the momentum premium but which at the same time delivers lower trading costs. Describe the strategy and implement it within the CRSP sample. 
 
-A portfolio that would capture a momentum effect but at the same time deliver lower trading costs, compared to the portfolio in 4, can be a portfolio with broader specifications of momentum. Instead of buying the upper 10th quantile of momentum and selling the 1st quantile, we buy the assets with a momentum above the median and sell those below the median. The idea is that this will result in a lower turnover, as assets enter and exit the buy and sell parts of the portfolio less frequently. 
+A portfolio that would capture a momentum effect but at the same time deliver lower trading costs, compared to the portfolio in 4, can be a portfolio with a strict no-short selling condition. Instead of buying the upper 10th quantile of momentum and selling the 1st quantile, we strictly go long in the upper 10th quantile. The idea is that this will result in a lower turnover, as assets enter and exit the portfolio less frequently. 
 
 ```{r, message=FALSE}
 ### Turnover for old portfolio
@@ -431,7 +431,7 @@ momentum = data_for_sorting %>%
   group_by(month) %>%
   mutate(
     portfolio = assign_portfolio( #Calling function from 4) to generate 10 portfolios
-    data = cur_data(), #use current set, i.e. assign_portfolios
+    data = cur_data(), #use current set, i.e. data_for_sorting
       var = momentum,
       n_portfolios = 10
     ),
@@ -457,11 +457,11 @@ trades_old <- momentum %>%
          portfolio_lag = case_when(portfolio_lag <= breakpoint_low ~ "low", portfolio_lag >= breakpoint_high ~ "high")) %>%
   select(permno, month, portfolio, portfolio_lag) %>%
   mutate_all(~replace(., is.na(.), "NA")) %>%
-  mutate(traded = ifelse(portfolio==portfolio_lag, 0, 1)) %>%
+  mutate(traded = ifelse(portfolio==portfolio_lag, 0, 1)) %>% #counts 1 every time a stock moves between pf's 
   group_by(month) %>%
-  summarise(count_traded = sum(traded == 1)) #CHECK THIS - we dont multiply by 2 because we assume just one trade per transaction, i.e. no stock goes from pf 10 to 1 or from 1 to 10 in one month
+  summarise(count_traded = sum(traded == 1)) #summarizing total monthly transactions - we dont multiply by 2 because we assume just one trade per transaction, i.e. no stock goes from pf 10 to 1 or from 1 to 10 in one month
 
-#Merging the lagged portfolio and calculate number of monthly trades for the new strategy
+#Merging the lagged portfolio and calculate number of monthly trades for the new strategy (no short-selling)
 trades_new <- momentum %>%
   left_join(lagged_momentum, c("permno","month")) %>%
   drop_na() %>%
@@ -472,47 +472,32 @@ trades_new <- momentum %>%
          portfolio_lag = case_when(portfolio_lag >= breakpoint_high ~ "high")) %>%
   select(permno, month, portfolio, portfolio_lag) %>%
   mutate_all(~replace(., is.na(.), "NA")) %>%
-  mutate(traded = ifelse(portfolio==portfolio_lag, 0, 1)) %>%
+  mutate(traded = ifelse(portfolio==portfolio_lag, 0, 1)) %>% #counts 1 every time a stock moves between pf's 
   group_by(month) %>%
-  summarise(count_traded = sum(traded == 1)) #CHECK THIS - we dont multiply by 2 because we assume just one trade per transaction, i.e. no stock goes from pf 10 to 1 or from 1 to 10 in one month
+  summarise(count_traded = sum(traded == 1)) #summarizing total monthly transactions
+```
 
-#Første sku på at regne sharpe fra den gamle strategi - dette gav noget mærkeligt
-sharpe_old = momentum %>%
-  left_join(lagged_momentum, c("permno","month")) %>%
-  drop_na() %>%
-  mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
-  group_by(month) %>%
-  mutate(breakpoint_low = 1,
-         breakpoint_high = 10,
-         portfolio = case_when(portfolio <= breakpoint_low ~ "low", 
-                               portfolio >= breakpoint_high ~ "high")) %>%
-  select(permno, month, ret, mktcap_lag, ret_excess, portfolio) %>%
-  filter(str_detect(portfolio, 'high|low')) %>%
-  mutate(ret_excess = if (portfolio == 'low'){
-    ret_excess * (-1)
-  } else ret_excess) %>%
-  group_by(month) %>% #efter dette skal det implementeres --> high_low fra opg 4 kan jeg ikke få til at fungere.
-  summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag), sd = sd(ret_excess), .groups = "drop") %>%
-  mutate(sharpe = excess_ret/sd) %>%
-  summarise(sharpe = mean(sharpe), ret_excess = mean(excess_ret), sd = mean(sd))
-
-#Andet skud på at regne sharpe fra den gamle - den tager data fra samme sted men giver os stadig et andet excess return...
-sharpe_old1 = momentum_portfolios %>% 
+#Report the resulting Sharpe-ratio and average turnover and compare to the baseline momentum strategy from exercise 4.
+Her skal værdierne stå når vi er klar:
+```{r, message=FALSE}
+#Finding sharpe ratio of the baseline portfolio
+sharpe_old = momentum_portfolios %>% 
   mutate(portfolio = as.numeric(portfolio)) %>%
   group_by(month) %>%
   mutate(breakpoint_low = 1,
          breakpoint_high = 10,
          portfolio = case_when(portfolio <= breakpoint_low ~ "low",
                                portfolio >= breakpoint_high ~ "high")) %>%
-  filter(str_detect(portfolio, 'high|low')) %>%
-  group_by(month) %>% #efter dette skal det implementeres --> high_low fra opg 4 kan jeg ikke få til at fungere.
+  filter(str_detect(portfolio, 'high|low')) %>% #removes all NA rows, i.e. observations that are not part of the portfolio
+  group_by(month) %>% 
   mutate(ret_excess = if (portfolio == 'low'){
     ret_excess * (-1)
-  } else ret_excess) %>%
+  } else ret_excess) %>% #flips the sign of excess return for all stocks subject to short-selling
   summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag), sd = sd(ret_excess), .groups = "drop") %>%
   mutate(sharpe = excess_ret/sd) %>%
   summarise(sharpe = mean(sharpe), excess_ret = mean(excess_ret), sd = mean(sd))
 
+#Finding sharpe ratio of the new portfolio with no short-selling
 sharpe_new = momentum %>%
   left_join(lagged_momentum, c("permno","month")) %>%
   drop_na() %>%
@@ -521,7 +506,7 @@ sharpe_new = momentum %>%
   mutate(breakpoint_high = 10,
          portfolio = case_when(portfolio >= breakpoint_high ~ "high")) %>% 
   select(permno, month, ret, mktcap_lag, ret_excess, portfolio) %>%
-  filter(portfolio=='high') %>%
+  filter(portfolio=='high') %>% #removes all observations that are not part of the portfolio
   group_by(month) %>%
   summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag), sd = sd(ret_excess), .groups = "drop") %>%
   mutate(sharpe = excess_ret/sd) %>%
