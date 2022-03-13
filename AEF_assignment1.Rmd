@@ -33,11 +33,19 @@ library(furrr)
 # ******************************************
 
 #Connecting to the database
-tidy_finance <- dbConnect(SQLite(), "/Users/fredlundahl/Desktop/AEF/data/", 
+
+tidy_finance <- dbConnect(SQLite(), "/Users/fredlundahl/Desktop/AEF/data/tidy_finance.sqlite", 
              extended_types = TRUE)
 
 # tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
                           # extended_types = TRUE)
+
+# tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
+                        #  extended_types = TRUE)
+# >>>>>>> 1c14b8140aaa911071766c7449682272a7dc0531:AEF_assignment1.Rmd
+
+#tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
+                          #extended_types = TRUE)
 
 #Reading in crsp_monthly dataset
 crsp_monthly <- tbl(tidy_finance, "crsp_monthly") %>%
@@ -52,7 +60,7 @@ factors_ff_monthly <- tbl(tidy_finance, "factors_ff_monthly") %>%
 #Merging crsp_monthly and factors_ff_monthly through a left-join, merging by the common "month" column 
 crsp_monthly <- crsp_monthly %>%
   left_join(factors_ff_monthly, by = "month") %>%
-  select(permno, month, ret_excess, mkt_excess, mktcap,mktcap_lag) #selecting these columns from our joint set
+  select(permno, month, ret, rf, ret_excess, mkt_excess, mktcap,mktcap_lag) #selecting these columns from our joint set
 
 
 dbListTables(tidy_finance) # check the database
@@ -112,7 +120,7 @@ Summary statistics for ret_excess and mktcap shows that the mean return per mont
 
 #### 2. Generate a new column ret_excess_lag. Briefly state why crsp_monthly %>% group_by(permno) %>% mutate(ret_excess_lag = lag(ret_excess)) does not provide the correct result if crsp_monthly contains implicitly missing values. Report suitable summary statistics or visualizations that show if returns rt and rt−1 exhibit autocorrelation that is significantly different from zero. What do your results imply? Is there short-term momentum?
 
-# Briefly stating why the rpovided code provides incorrect results.
+# Briefly stating why the provided code gives incorrect results.
 If crsp_monthly contains implicitly missing values, this will cause a ret_excess_lag to not necessarily represent the value of the previous month, but the previous value in the dataset. An implicitly missing value then makes a ret_excess_lag value represent the second lagged value. 
 
 # Generate ret_excess_lag
@@ -127,12 +135,10 @@ ret_excess_lag <- crsp_monthly %>%
   crsp_monthly
 ```
 
-
 # Investigating potential autocorrelation in ret_excess_lag. 
 
 ```{r}
 crsp_monthly %>%
-  drop_na() %>%
   ggplot(aes(x = month, y = ret_excess_lag)) +
   geom_line() +
   labs(
@@ -145,11 +151,11 @@ crsp_monthly %>%
 As the mean of returns is non-constant, it does not fluctuate around a constant value, returns suffer from autocorrelation. 
 
 ```{r}
-ret_excess_lag %>%
-  select(month, ret_excess_lag) %>%
-pacf(month, ret_excess_lag)
-
-pacf(ret_excess_lag[ret_excess_lag])
+crsp_monthly %>%
+  drop_na() %>%
+  factor(ret_excess_lag) %>%
+  as.numeric(ret_excess_lag) %>%
+  pacf(ret_excess_lag)
 ```
 
 
@@ -419,82 +425,9 @@ When a given portfolio selection is based on i.e., past year market cap momentum
 
 A portfolio that would capture a momentum effect but at the same time deliver lower trading costs, compared to the portfolio in 4, can be a portfolio with broader specifications of momentum. Instead of buying the upper 10th quantile of momentum and selling the 1st quantile, we buy the assets with a momentum above the median and sell those below the median. The idea is that this will result in a lower turnover, as assets enter and exit the buy and sell parts of the portfolio less frequently. 
 
-```{r}
-#We dont use these lines for anything right now 
-#cheaperportfolio = momentum_portfolios %>% 
-  #mutate(portfolio = as.numeric(portfolio)) %>%
-  #group_by(month) %>%
-  #mutate(breakpoint = 5,
-     #portfolio = case_when(portfolio <= breakpoint ~ "sell",
-                               #portfolio >= breakpoint ~ "buy")) %>%
-  #group_by(month, portfolio) %>%
-  #summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag)) # Value weighted return by high or low grouped momentum values. 
-
-### Turnover for new portfolio
-new_momentum = data_for_sorting %>%
-  group_by(month) %>%
-  mutate(
-    portfolio = assign_portfolio( #Calling function from 4) to create 2 portfolios
-    data = cur_data(), #use current set, i.e. assign_portfolios
-      var = momentum,
-      n_portfolios = 4
-    ),
-    portfolio = as.factor(portfolio)
-  )
-
-#Creating a 1 month lag of the portfolio column so that we can compare from month to month  
-lag_guys <- new_momentum %>% 
-  mutate(month = month %m+% months(1)) %>%
-  select(permno, month, portfolio_lag = portfolio) %>%
-  drop_na()
-
-#Merging the lagged portfolio and calculate number of monthly trades
-all_guys <- new_momentum %>%
-  left_join(lag_guys, c("permno","month")) %>%
-  drop_na() %>%
-  select(permno, month, portfolio, portfolio_lag) %>%
-  group_by(month) %>%
-  mutate(trade = if (portfolio==1 && portfolio_lag ==2) {
-                    1
-                  } else if ( portfolio==1 && portfolio_lag ==3) {
-                1
-                  } else if ( portfolio==1 && portfolio_lag ==4) {
-                2
-                } else if ( portfolio==2 && portfolio_lag ==1) {
-                1
-                  } else if ( portfolio==2 && portfolio_lag ==4) {
-                1
-                  }
-                else if ( portfolio==3 && portfolio_lag ==1) {
-                1
-                  } else if ( portfolio==3 && portfolio_lag ==4) {
-                1
-                } else if ( portfolio==4 && portfolio_lag ==1) {
-                2
-                  } else if ( portfolio==4 && portfolio_lag ==2) {
-                1
-                  }
-                else if ( portfolio==4 && portfolio_lag ==3) {
-                1
-                } else 0
-         ) 
-all_guys %>% 
-  group_by(month) %>%
-  summarise(count_traded = sum(trade == 1)) #CHECK THIS - we multiply number of trades by 2 because every transaction involves both buying and selling or selling and buying at the same time
-
-#We dont use these lines for anything right now
-#cheaperportfolio %>% 
-  #pivot_wider(names_from = portfolio, values_from = excess_ret) %>%
-  #mutate(high_low = buy - sell) %>% 
-  #left_join(factors_ff_monthly, by = "month") %>%
-  #lm(high_low ~ mkt_excess, data = .) %>% broom::tidy()
-
-
-# Den her portefølje har vi allerede lavet. Den hedder momentum_portfolios
-#######################################
-
+```{r, message=FALSE}
 ### Turnover for old portfolio
-old_momentum = data_for_sorting %>%
+momentum = data_for_sorting %>%
   group_by(month) %>%
   mutate(
     portfolio = assign_portfolio( #Calling function from 4) to generate 10 portfolios
@@ -507,14 +440,14 @@ old_momentum = data_for_sorting %>%
 ###########################################
 
 #Creating a 1 month lag of the portfolio column so that we can compare from month to month 
-lag_guys_old <- old_momentum %>%
+lagged_momentum <- momentum %>%
   mutate(month = month %m+% months(1)) %>%
   select(permno, month, portfolio_lag = portfolio) %>%
   drop_na()
 
-#Merging the lagged portfolio and calculate number of monthly trades
-all_guys_old <- old_momentum %>%
-  left_join(lag_guys_old, c("permno","month")) %>%
+#Merging the lagged portfolio and calculate number of monthly trades for the old strategy
+trades_old <- momentum %>%
+  left_join(lagged_momentum, c("permno","month")) %>%
   drop_na() %>%
   mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
   group_by(month) %>%
@@ -527,6 +460,73 @@ all_guys_old <- old_momentum %>%
   mutate(traded = ifelse(portfolio==portfolio_lag, 0, 1)) %>%
   group_by(month) %>%
   summarise(count_traded = sum(traded == 1)) #CHECK THIS - we dont multiply by 2 because we assume just one trade per transaction, i.e. no stock goes from pf 10 to 1 or from 1 to 10 in one month
+
+#Merging the lagged portfolio and calculate number of monthly trades for the new strategy
+trades_new <- momentum %>%
+  left_join(lagged_momentum, c("permno","month")) %>%
+  drop_na() %>%
+  mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
+  group_by(month) %>%
+  mutate(breakpoint_high = 10,
+         portfolio = case_when(portfolio >= breakpoint_high ~ "high"),
+         portfolio_lag = case_when(portfolio_lag >= breakpoint_high ~ "high")) %>%
+  select(permno, month, portfolio, portfolio_lag) %>%
+  mutate_all(~replace(., is.na(.), "NA")) %>%
+  mutate(traded = ifelse(portfolio==portfolio_lag, 0, 1)) %>%
+  group_by(month) %>%
+  summarise(count_traded = sum(traded == 1)) #CHECK THIS - we dont multiply by 2 because we assume just one trade per transaction, i.e. no stock goes from pf 10 to 1 or from 1 to 10 in one month
+
+#Første sku på at regne sharpe fra den gamle strategi - dette gav noget mærkeligt
+sharpe_old = momentum %>%
+  left_join(lagged_momentum, c("permno","month")) %>%
+  drop_na() %>%
+  mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
+  group_by(month) %>%
+  mutate(breakpoint_low = 1,
+         breakpoint_high = 10,
+         portfolio = case_when(portfolio <= breakpoint_low ~ "low", 
+                               portfolio >= breakpoint_high ~ "high")) %>%
+  select(permno, month, ret, mktcap_lag, ret_excess, portfolio) %>%
+  filter(str_detect(portfolio, 'high|low')) %>%
+  mutate(ret_excess = if (portfolio == 'low'){
+    ret_excess * (-1)
+  } else ret_excess) %>%
+  group_by(month) %>% #efter dette skal det implementeres --> high_low fra opg 4 kan jeg ikke få til at fungere.
+  summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag), sd = sd(ret_excess), .groups = "drop") %>%
+  mutate(sharpe = excess_ret/sd) %>%
+  summarise(sharpe = mean(sharpe), ret_excess = mean(excess_ret), sd = mean(sd))
+
+#Andet skud på at regne sharpe fra den gamle - den tager data fra samme sted men giver os stadig et andet excess return...
+sharpe_old1 = momentum_portfolios %>% 
+  mutate(portfolio = as.numeric(portfolio)) %>%
+  group_by(month) %>%
+  mutate(breakpoint_low = 1,
+         breakpoint_high = 10,
+         portfolio = case_when(portfolio <= breakpoint_low ~ "low",
+                               portfolio >= breakpoint_high ~ "high")) %>%
+  filter(str_detect(portfolio, 'high|low')) %>%
+  group_by(month) %>% #efter dette skal det implementeres --> high_low fra opg 4 kan jeg ikke få til at fungere.
+  mutate(ret_excess = if (portfolio == 'low'){
+    ret_excess * (-1)
+  } else ret_excess) %>%
+  summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag), sd = sd(ret_excess), .groups = "drop") %>%
+  mutate(sharpe = excess_ret/sd) %>%
+  summarise(sharpe = mean(sharpe), excess_ret = mean(excess_ret), sd = mean(sd))
+
+sharpe_new = momentum %>%
+  left_join(lagged_momentum, c("permno","month")) %>%
+  drop_na() %>%
+  mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
+  group_by(month) %>%
+  mutate(breakpoint_high = 10,
+         portfolio = case_when(portfolio >= breakpoint_high ~ "high")) %>% 
+  select(permno, month, ret, mktcap_lag, ret_excess, portfolio) %>%
+  filter(portfolio=='high') %>%
+  group_by(month) %>%
+  summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag), sd = sd(ret_excess), .groups = "drop") %>%
+  mutate(sharpe = excess_ret/sd) %>%
+  summarise(sharpe = mean(sharpe), ret_excess = mean(excess_ret), sd = mean(sd))
+
 ```
 
 
