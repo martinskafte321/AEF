@@ -469,8 +469,8 @@ all_guys_new <- momentum %>%
   group_by(month) %>%
   summarise(count_traded = sum(traded == 1)) #CHECK THIS - we dont multiply by 2 because we assume just one trade per transaction, i.e. no stock goes from pf 10 to 1 or from 1 to 10 in one month
 
-#This bitch - vi skal have fundet en måde at lave et invert af ex_ret for alle rækker med 'low', ellers bliver ex_ret forkert
-old_mom = momentum %>%
+#Første sku på at regne sharpe fra den gamle strategi - dette gav noget mærkeligt
+sharpe_old = momentum %>%
   left_join(lagged_momentum, c("permno","month")) %>%
   drop_na() %>%
   mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
@@ -481,12 +481,32 @@ old_mom = momentum %>%
                                portfolio >= breakpoint_high ~ "high")) %>%
   select(permno, month, ret, mktcap_lag, ret_excess, portfolio) %>%
   filter(str_detect(portfolio, 'high|low')) %>%
+  mutate(ret_excess = if (portfolio == 'low'){
+    ret_excess * (-1)
+  } else ret_excess) %>%
   group_by(month) %>% #efter dette skal det implementeres --> high_low fra opg 4 kan jeg ikke få til at fungere.
   summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag), sd = sd(ret_excess), .groups = "drop") %>%
   mutate(sharpe = excess_ret/sd) %>%
   summarise(sharpe = mean(sharpe), ret_excess = mean(excess_ret), sd = mean(sd))
 
-new_mom = momentum %>%
+#Andet skud på at regne sharpe fra den gamle - den tager data fra samme sted men giver os stadig et andet excess return...
+sharpe_old1 = momentum_portfolios %>% 
+  mutate(portfolio = as.numeric(portfolio)) %>%
+  group_by(month) %>%
+  mutate(breakpoint_low = 1,
+         breakpoint_high = 10,
+         portfolio = case_when(portfolio <= breakpoint_low ~ "low",
+                               portfolio >= breakpoint_high ~ "high")) %>%
+  filter(str_detect(portfolio, 'high|low')) %>%
+  group_by(month) %>% #efter dette skal det implementeres --> high_low fra opg 4 kan jeg ikke få til at fungere.
+  mutate(ret_excess = if (portfolio == 'low'){
+    ret_excess * (-1)
+  } else ret_excess) %>%
+  summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag), sd = sd(ret_excess), .groups = "drop") %>%
+  mutate(sharpe = excess_ret/sd) %>%
+  summarise(sharpe = mean(sharpe), excess_ret = mean(excess_ret), sd = mean(sd))
+
+sharpe_new = momentum %>%
   left_join(lagged_momentum, c("permno","month")) %>%
   drop_na() %>%
   mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
