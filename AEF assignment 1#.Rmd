@@ -33,11 +33,11 @@ library(furrr)
 # ******************************************
 
 #Connecting to the database
-#tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
-#                          extended_types = TRUE)
+tidy_finance <- dbConnect(SQLite(), "/Users/fredlundahl/Desktop/AEF/data/", 
+             extended_types = TRUE)
 
-tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
-                          extended_types = TRUE)
+# tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
+                          # extended_types = TRUE)
 
 #Reading in crsp_monthly dataset
 crsp_monthly <- tbl(tidy_finance, "crsp_monthly") %>%
