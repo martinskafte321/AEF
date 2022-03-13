@@ -1,10 +1,8 @@
 ---
-title: "AEFassignment1"
+title: "AEF assignment 1#"
 author: "Martin, Fred and Oliver"
 date: "6/3/2022"
-output:
-  pdf_document: default
-  html_document: default
+output: html_document
 ---
 
 ```{r setup, include=FALSE, warning=FALSE, echo=FALSE}
@@ -14,7 +12,6 @@ knitr::opts_chunk$set(echo = FALSE)
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 # Loading packages:
-library(knitr)
 library(RSQLite)
 library(dbplyr)
 library(dplyr)
@@ -483,7 +480,7 @@ all_guys_old <- momentum_portfolios %>%
   group_by(month) %>%
   summarise(count_traded = sum(traded == 1)) #CHECK THIS - we dont multiply by 2 because we assume just one trade per transaction, i.e. no stock goes from pf 10 to 1 or from 1 to 10 in one month
 
-all_guys_new <- momentum_portfolios %>%
+all_guys_new <- momentum %>%
   left_join(lagged_momentum, c("permno","month")) %>%
   drop_na() %>%
   mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
@@ -498,7 +495,7 @@ all_guys_new <- momentum_portfolios %>%
   summarise(count_traded = sum(traded == 1)) #CHECK THIS - we dont multiply by 2 because we assume just one trade per transaction, i.e. no stock goes from pf 10 to 1 or from 1 to 10 in one month
 
 
-mom= momentum_portfolios %>%
+mom= momentum %>%
   left_join(lagged_momentum, c("permno","month")) %>%
   drop_na() %>%
   mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
