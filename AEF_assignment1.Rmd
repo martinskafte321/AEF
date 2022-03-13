@@ -394,7 +394,7 @@ strategy_portfolio_original %>%
   lm(high_low ~ 1 + mkt_excess, data = .) %>% broom::tidy() 
 # Again a linear regression of the high-low strategy on market excess return to get the alpha. 
 
-remove(strategy_portfolio_original)
+
 ```
 
 # What do you conclude about the performance of the momentum strategy? Is the strategy market neutral (i.e., does it exhibit a market beta which is zero)? Does the strategy deliver abnormal excess returns (i.e., a positive alpha)?
@@ -483,7 +483,7 @@ lagged_momentum <- momentum_portfolios %>%
   drop_na()
 
 #Merging the lagged portfolio and calculate number of monthly trades for the old strategy
-trades_old <- momentum_portfolios %>%
+momentum_original = momentum_portfolios %>%
   left_join(lagged_momentum, c("permno","month")) %>%
   drop_na() %>%
   mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
@@ -491,68 +491,69 @@ trades_old <- momentum_portfolios %>%
   mutate(breakpoint_low = 1,
          breakpoint_high = 10,
          portfolio = case_when(portfolio <= breakpoint_low ~ "low", portfolio >= breakpoint_high ~ "high"),
-         portfolio_lag = case_when(portfolio_lag <= breakpoint_low ~ "low", portfolio_lag >= breakpoint_high ~ "high")) %>%
+         portfolio_lag = case_when(portfolio_lag <= breakpoint_low ~ "low", portfolio_lag >= breakpoint_high ~ "high"))
+
+trades_momentum_original = momentum_original %>%
   select(permno, month, portfolio, portfolio_lag) %>%
   mutate_all(~replace(., is.na(.), "NA")) %>%
   mutate(traded = ifelse(portfolio==portfolio_lag, 0, 1)) %>% #counts 1 every time a stock moves between pf's 
-  group_by(month) %>%
-  summarise(count_traded = sum(traded == 1)) #summarizing total monthly transactions - we dont multiply by 2 because we assume just one trade per transaction, i.e. no stock goes from pf 10 to 1 or from 1 to 10 in one month
+  ungroup() %>%
+  summarise(total_trades = sum(traded == 1))
 
 
-all_guys_new <- momentum_portfolios %>%
 
 #Merging the lagged portfolio and calculate number of monthly trades for the new strategy (no short-selling)
-trades_new <- momentum %>%
-
+momentum_new = momentum_portfolios %>%
   left_join(lagged_momentum, c("permno","month")) %>%
   drop_na() %>%
   mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
   group_by(month) %>%
   mutate(breakpoint_high = 10,
          portfolio = case_when(portfolio >= breakpoint_high ~ "high"),
-         portfolio_lag = case_when(portfolio_lag >= breakpoint_high ~ "high")) %>%
+         portfolio_lag = case_when(portfolio_lag >= breakpoint_high ~ "high"))
+
+trades_momentum_new = momentum_new %>%
   select(permno, month, portfolio, portfolio_lag) %>%
   mutate_all(~replace(., is.na(.), "NA")) %>%
   mutate(traded = ifelse(portfolio==portfolio_lag, 0, 1)) %>% #counts 1 every time a stock moves between pf's 
-  group_by(month) %>%
-  summarise(count_traded = sum(traded == 1)) #summarizing total monthly transactions
+  ungroup() %>%
+  summarise(total_trades = sum(traded == 1)) 
+
+table = matrix(c(trades_momentum_original,trades_momentum_new), ncol=1)
+rownames(table) <- c('momentum_original','momentum_new')
+colnames(table) <- c('Total trades')
+table %>% pander::pander()
+
+remove()
+
 ```
 
 #Report the resulting Sharpe-ratio and average turnover and compare to the baseline momentum strategy from exercise 4.
 Her skal værdierne stå når vi er klar:
 ```{r, message=FALSE}
-#Finding sharpe ratio of the baseline portfolio
-sharpe_old = momentum_portfolios %>% 
-  mutate(portfolio = as.numeric(portfolio)) %>%
-  group_by(month) %>%
-  mutate(breakpoint_low = 1,
-         breakpoint_high = 10,
-         portfolio = case_when(portfolio <= breakpoint_low ~ "low",
-                               portfolio >= breakpoint_high ~ "high")) %>%
-  filter(str_detect(portfolio, 'high|low')) %>% #removes all NA rows, i.e. observations that are not part of the portfolio
-  group_by(month) %>% 
-  mutate(ret_excess = if (portfolio == 'low'){
-    ret_excess * (-1)
-  } else ret_excess) %>% #flips the sign of excess return for all stocks subject to short-selling
-  summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag), sd = sd(ret_excess), .groups = "drop") %>%
-  mutate(sharpe = excess_ret/sd) %>%
-  summarise(sharpe = mean(sharpe), excess_ret = mean(excess_ret), sd = mean(sd))
 
-mom= momentum_portfolios %>%
+#Finding sharpe ratio of the baseline portfolio
+sharpe_old = strategy_portfolio_original %>%
+  pivot_wider(names_from = portfolio, values_from = excess_ret) %>%
+  mutate(highlow = high-low) %>%
+  ungroup() %>%
+  summarise(sd = sd(highlow),highlow = mean(highlow)) %>%
+  transmute(sharpe = highlow/sd)
+
 #Finding sharpe ratio of the new portfolio with no short-selling
-sharpe_new = momentum %>%
-  left_join(lagged_momentum, c("permno","month")) %>%
-  drop_na() %>%
-  mutate(portfolio = as.numeric(portfolio), portfolio_lag = as.numeric(portfolio_lag)) %>%
-  group_by(month) %>%
-  mutate(breakpoint_high = 10,
-         portfolio = case_when(portfolio >= breakpoint_high ~ "high")) %>% 
-  select(permno, month, ret, mktcap_lag, ret_excess, portfolio) %>%
-  filter(portfolio=='high') %>% #removes all observations that are not part of the portfolio
-  group_by(month) %>%
-  summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag), sd = sd(ret_excess), .groups = "drop") %>%
-  mutate(sharpe = excess_ret/sd) %>%
-  summarise(sharpe = mean(sharpe), ret_excess = mean(excess_ret), sd = mean(sd))
+sharpe_new = momentum_new %>% 
+  group_by(month,portfolio) %>%
+  summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag)) %>%
+  pivot_wider(names_from = portfolio, values_from = excess_ret) %>%
+  ungroup() %>%
+  summarise(sd = sd(high),high = mean(high)) %>%
+  transmute(sharpe = high/sd)
+
+
+table = matrix(c(sharpe_old,sharpe_new), ncol=1)
+rownames(table) <- c('Original portfolio','No short-portfolio')
+colnames(table) <- c('Sharpe Ratio')
+table %>% pander::pander()
 
 ```
 
