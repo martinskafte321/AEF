@@ -1,0 +1,60 @@
+---
+title: "Assignment 2"
+author: "Martin, Oliver and Fred"
+date: "4/6/2022"
+output: html_document
+---
+
+# Loading packages
+
+```{r}
+library(RSQLite)
+library(tidyverse)
+```
+
+
+### 1. 
+
+# Connecting to SQLite, reading in stock_charachteristics_monthly.
+
+```{r}
+tidy_finance_ML <- dbConnect(SQLite(), "/Users/fredlundahl/Desktop/AEF/tidy_finance_ML.sqlite", extended_types = TRUE)
+
+characteristics %>%
+  ungroup() %>% 
+  dbWriteTable(tidy_finance_ML, "stock_characteristics_monthly", ., overwrite = TRUE)
+```
+
+
+# Remove all observations prior to January 1st, 2005.
+# Instead of running the analysis with all characteristics, select 5 influential characteristics (use Figure 5 of the paper).
+# Use Table 4 to select 4 macroeconomic variables you wantto proceed with. Discuss your selection choices and clearly state which variables you select! Theremaining dataset should contain 744088 observations and 14 columns (4 macro characteristics, 5 stock characteristics, the industry classification, lagged market capitalization, excess returns, month and the company identifier).
+
+```{r}
+characteristics <- read_csv("https://www.dropbox.com/s/htkvj1hzabyucwk/datashare.csv?dl=1")
+
+characteristics <- characteristics %>%
+  mutate(DATE = ymd(DATE),
+         DATE = floor_date(DATE, "month")) %>%
+  rename("month" = "DATE") %>%
+  rename_with(~paste0("characteristic_", .), -c(permno, month, sic2))
+```
+
+
+
+# Removing all observations prior to January 1st, 2005.
+
+# Selecting 5 influential characteristics (from Figure 5)
+# market beta = beta
+# stock momentum = mom12m
+# short-term reversal = mom1m
+# earnings-to-price = ep
+# turnover = turn
+
+```{r}
+
+
+
+
+```
+
