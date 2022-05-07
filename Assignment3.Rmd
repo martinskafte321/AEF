@@ -1,0 +1,105 @@
+---
+title: "Assignment3"
+author: "Martin Andersen"
+date: "6/5/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE, }
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# Loading packages:
+library(RSQLite)
+library(tidyverse)
+library(tidymodels) 
+library(furrr) 
+library(glmnet)
+library(broom)
+library(timetk)
+library(scales)
+library(lubridate)
+library(scales)
+library(frenchdata)
+library(caret)
+library(ggplot2)
+library(ggpubr)
+library(kableExtra)
+library(mltools)
+library(data.table)
+library(vtable)
+library(keras)
+```
+
+
+```{r}
+# Select all stocks from the CRSP universe
+ tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
+                           extended_types = TRUE)
+
+# Reading in crsp_monthly dataset
+data <- tbl(tidy_finance, "crsp_monthly") %>%
+  collect() %>%
+  mutate(month = as.Date(as.POSIXct.Date(month)))
+```
+```{r}
+# Provide a brief summary of the sample:
+
+table = data %>% 
+  summarise(
+        Variable = "Ret_excess",
+        Mean = mean(ret_excess),
+        SD = sd(ret_excess),
+        Min = min(ret_excess),
+        Max = max(ret_excess),
+        Start = min(month),
+        End = max(month)
+         ) %>%
+ mutate(Mean = format(Mean, digits = 2), SD = format(SD, digits = 2))
+
+ggtable = ggtexttable(table, rows = NULL,
+                       theme = ttheme("classic"))
+
+plot = data %>% 
+  select(permno, industry) %>%
+  distinct() %>%
+  group_by(industry) %>%
+  summarise(n = n()) %>%
+  ggplot(aes(x = industry, y = n)) +
+  ggtitle("Number of stocks per industry") +
+  geom_bar(stat="identity", width=.3, fill="tomato3") +
+  labs(x="Industry class",
+         y="Number of stocks") + 
+    theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+lineplot = data %>% 
+  select(permno, industry, month) %>%
+  group_by(month) %>%
+  summarise(n = n()) %>%
+  ggplot(aes(x = month, y = n)) +
+  ggtitle("Number of stocks per month") +
+  geom_line(color = "#FC4E07", size = 1.5) +
+   labs(x="Date",
+         y="Number of stocks")
+
+
+
+# We can arrange the two plots to show them together in one graph. 
+figure = ggarrange(plot, lineplot, ncol = 2) 
+
+
+ggarrange(figure,ggtable,   # First row with bar plot
+              nrow = 2,
+          heights = c(1, 0.4)
+          ) 
+
+
+
+remove(table,plot,ggtable, lineplot, figure)
+
+```
+
+
+
+
