@@ -39,16 +39,31 @@ library(keras)
                            extended_types = TRUE)
 
 # Reading in crsp_monthly dataset
-data <- tbl(tidy_finance, "crsp_monthly") %>%
+tidy_finance <- tbl(tidy_finance, "crsp_monthly") %>%
+  select(permno,month,ret_excess,industry) %>%
   collect() %>%
   mutate(month = as.Date(as.POSIXct.Date(month)))
 ```
+To keep the analysis simple we work with a balanced panel and exclude tickers, which is not traded for the full period. 
 ```{r}
+
+# Clean data by removing stocks, which is not traded on every single trading day. 
+data <- tidy_finance %>%
+  group_by(permno) %>%
+  mutate(n=n()) %>%
+  ungroup() %>%
+  filter(n == max(n)) %>%
+  select(-n)
+
+```
+
+```{r, fig.align = 'center'}
 # Provide a brief summary of the sample:
 
 table = data %>% 
   summarise(
         Variable = "Ret_excess",
+        "N stocks"  = n_distinct(month),
         Mean = mean(ret_excess),
         SD = sd(ret_excess),
         Min = min(ret_excess),
@@ -56,10 +71,12 @@ table = data %>%
         Start = min(month),
         End = max(month)
          ) %>%
- mutate(Mean = format(Mean, digits = 2), SD = format(SD, digits = 2))
+ mutate(Mean = format(Mean, digits = 2), SD = format(SD, digits = 2),
+        Min = format(Min, digits = 3), Max = format(Max, digits = 3))
 
 ggtable = ggtexttable(table, rows = NULL,
-                       theme = ttheme("classic"))
+                       theme = ttheme("classic")) %>%
+  tab_add_title(text = "Summary statistics")
 
 plot = data %>% 
   select(permno, industry) %>%
@@ -73,26 +90,9 @@ plot = data %>%
          y="Number of stocks") + 
     theme(axis.text.x = element_text(angle = 45, hjust=1))
 
-lineplot = data %>% 
-  select(permno, industry, month) %>%
-  group_by(month) %>%
-  summarise(n = n()) %>%
-  ggplot(aes(x = month, y = n)) +
-  ggtitle("Number of stocks per month") +
-  geom_line(color = "#FC4E07", size = 1.5) +
-   labs(x="Date",
-         y="Number of stocks")
-
-
-
 # We can arrange the two plots to show them together in one graph. 
-figure = ggarrange(plot, lineplot, ncol = 2) 
-
-
-ggarrange(figure,ggtable,   # First row with bar plot
-              nrow = 2,
-          heights = c(1, 0.4)
-          ) 
+ggarrange(plot, ggtable, nrow = 2,
+                   heights = c(1, 0.5)) 
 
 
 
@@ -100,6 +100,92 @@ remove(table,plot,ggtable, lineplot, figure)
 
 ```
 
+### 2.1 Derive a closed-form solution for the mean-variance efficient portfolio ω∗t+1 based on the transaction cost specification above. Discuss if the assumption of transaction costs proportional to volatility makes sense.
 
 
+### 2.2 Write a function that computes the optimal weights ω∗t+1 based on the inputs μ,Σ,γ,λ and the current weights ωt+. You can assume γ = 4 throughout the entire assignment.
+
+```{r}
+# Function to compute optimal portfolio weigths based on inputs. 
+
+efficient_weights <- function(mu, sigma, gamma = 4, 
+                              lambda, w_prev = 1/ncol(sigma) * rep(1,ncol(sigma))
+) {
+  
+  iota <- rep(1, ncol(sigma))
+  
+  sigma_adjusted <- sigma + lambda/gamma * diag(ncol(sigma))
+  mu_adjusted <- mu + lambda*w_prev
+  
+  sigma_inv <- solve(sigma_adjusted)
+  
+  w_mvp <- sigma_inv %*% iota
+  w_mvp <- as.vector(w_mvp / sum(w_mvp))
+  
+  w_opt <- w_mvp + 1/gamma*(sigma_inv - (sigma_inv %*% iota %*% t(iota) %*% sigma_inv)/sum(sigma_inv)) %*% mu_adjusted
+  return(as.vector(w_opt))
+}
+
+```
+
+
+#### 2.3 Use the full sample of your data to compute sample mean returns and the sample variance covariance matrix.
+
+```{r}
+# We will need a a (T x N) matrix of returns to compute a matrix of returns: 
+ret_matrix <- data %>%
+  group_by(permno) %>%
+  select(-industry) %>%
+  pivot_wider(
+    names_from = permno,
+    values_from = ret_excess
+  ) %>% 
+  select(-month) %>%
+  drop_na() 
+
+
+# using the returns matrix, we can compute the covariance matrix 
+sigma <- cov(ret_matrix)
+mu <- colMeans(ret_matrix) # extract the sample mean returns from the return matrix
+
+```
+
+#### 2.3 Suppose that the initial portfolio ωt+is the naive, equal weighted allocation and the investor has a risk aversion of γ = 4. Compute the optimal portfolio ω∗t+1(λ) for different values of the transaction cost parameter λ.
+```{r, fig.width=8, fig.height=4}
+# To calculate the optimal portfolio with 1/N initial we will use the hard-coded weight parameter from the function, as this provides an initially equal-weighted portfolio.
+
+t_costs = 20 * qexp((0:50)/100)
+collect_weights = list()
+for (i in seq_along(t_costs)) {
+  
+  weights = efficient_weights(sigma = sigma, mu = mu, lambda = t_costs[i])
+  
+  collect_weights[[i]] = weights
+}
+
+
+
+transactions_costs <- expand_grid(lambda = 20 * qexp((1:99)/100)) %>%
+  mutate(weights = map(.x = lambda,
+                       ~efficient_weights(
+                         sigma = sigma,
+                         mu = mu,
+                         lambda = .x / 10000,
+                         w_prev = 1/ncol(sigma) * rep(1,ncol(sigma))
+                         
+                       )
+                       ),
+         concentration = map_dbl(weights, ~sum(abs(. - 1/ncol(sigma) * rep(1,ncol(sigma)))))
+         )
+
+transactions_costs %>% 
+  ggplot(aes(x = lambda, y = concentration)) + 
+  geom_line(color="tomato3") +
+  labs(x = "Transaction cost parameter", 
+       y = "Distance from naive",
+       title = "Optimal portfolio weights for different transaction cost")
+
+```
+
+The higher the level of transaction costs, the closer will the optimal portfolio be to the equal-weighted. 
 
