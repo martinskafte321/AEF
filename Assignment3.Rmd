@@ -30,6 +30,7 @@ library(mltools)
 library(data.table)
 library(vtable)
 library(keras)
+library(quadprog)
 ```
 
 
@@ -171,7 +172,7 @@ transactions_costs <- expand_grid(lambda = 20 * qexp((1:99)/100)) %>%
                          
                        )
                        ),
-         concentration = map_dbl(weights, ~sum(abs(. - 1/ncol(sigma) * rep(1,ncol(sigma)))))
+         concentration = map_dbl(weights, ~sum(abs(. - naive_weights)))
          )
 
 transactions_costs %>% 
@@ -207,6 +208,8 @@ performance_values <- list("MV (TC)" = performance_values,
                            "MV (No SS)" = performance_values, 
                             "Naive" = performance_values)
 
+w_prev_1 <- w_prev_2 <- w_prev_3 <- naive_weights
+
 # Helper function to adjust weights due to returns changing
 adjust_weights <- function(w, next_return){
   w_prev <- 1 + w * next_return
@@ -220,6 +223,7 @@ evaluate_performance <- function(w, w_previous, next_return, lambda){
   net_return <- raw_return - lambda * turnover
   c(raw_return, turnover, net_return)
 }
+
 
 ```
 
@@ -235,7 +239,8 @@ for (p in 1:periods) {
   sigma <- cov(returns_window)
   mu  <- colMeans(returns_window)
   
-  # Transaction cost-adjusted portfolio:
+  # Mean-variance transaction cost-adjusted portfolio:
+  
   w_MV_TC <- efficient_weights(mu = mu,
                                     sigma = sigma,
                                     lambda = lambda,
@@ -248,11 +253,27 @@ for (p in 1:periods) {
                                                       lambda = lambda
                                                       )
   
-  naive_weights = adjust_weights(w_MV_TC, one_ahead_return) # In the first period, this is the naive weight (1/N), but in the second and forward we adjust it. 
+  w_prev_1 = adjust_weights(w_MV_TC, one_ahead_return) # In the first period, this is the naive weight (1/N), but in the second and forward we adjust it. 
   
+  # Mean-variance without short-selling portfolio (still with transaction costs):
+  w_MV_NSS <- solve.QP(Dmat = 4 * sigma,
+                       dvec = mu,
+                       Amat = cbind(1,diag(ncol(ret_matrix))),
+                       bvec = c(1,rep(0, ncol(ret_matrix))),
+                       meq = 1
+                       )
+  
+  
+  # Naive portfolio allocation:
+  
+  performance_values[[3]][p,] <- evaluate_performance(w = naive_weights,
+                                                      w_previous = naive_weights,
+                                                      next_return = one_ahead_return,
+                                                      lambda = 0)
+  
+  w_prev_3 = adjust_weights(naive_weights, one_ahead_return)
   
 }
-
 
 ```
 
