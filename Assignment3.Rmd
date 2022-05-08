@@ -39,22 +39,25 @@ library(keras)
                            extended_types = TRUE)
 
 # Reading in crsp_monthly dataset
-tidy_finance <- tbl(tidy_finance, "crsp_monthly") %>%
+crsp_monthly <- tbl(tidy_finance, "crsp_monthly") %>%
   select(permno,month,ret_excess,industry) %>%
   collect() %>%
   mutate(month = as.Date(as.POSIXct.Date(month)))
+
+remove(tidy_finance)
 ```
 To keep the analysis simple we work with a balanced panel and exclude tickers, which is not traded for the full period. 
 ```{r}
 
 # Clean data by removing stocks, which is not traded on every single trading day. 
-data <- tidy_finance %>%
+data <- crsp_monthly %>%
   group_by(permno) %>%
   mutate(n=n()) %>%
   ungroup() %>%
   filter(n == max(n)) %>%
   select(-n)
 
+remove(crsp_monthly)
 ```
 
 ```{r, fig.align = 'center'}
@@ -109,7 +112,7 @@ remove(table,plot,ggtable, lineplot, figure)
 # Function to compute optimal portfolio weigths based on inputs. 
 
 efficient_weights <- function(mu, sigma, gamma = 4, 
-                              lambda, w_prev = 1/ncol(sigma) * rep(1,ncol(sigma))
+                              lambda, w_prev
 ) {
   
   iota <- rep(1, ncol(sigma))
@@ -148,22 +151,15 @@ ret_matrix <- data %>%
 sigma <- cov(ret_matrix)
 mu <- colMeans(ret_matrix) # extract the sample mean returns from the return matrix
 
+remove(data)
+
 ```
 
 #### 2.3 Suppose that the initial portfolio ωt+is the naive, equal weighted allocation and the investor has a risk aversion of γ = 4. Compute the optimal portfolio ω∗t+1(λ) for different values of the transaction cost parameter λ.
 ```{r, fig.width=8, fig.height=4}
 # To calculate the optimal portfolio with 1/N initial we will use the hard-coded weight parameter from the function, as this provides an initially equal-weighted portfolio.
 
-t_costs = 20 * qexp((0:50)/100)
-collect_weights = list()
-for (i in seq_along(t_costs)) {
-  
-  weights = efficient_weights(sigma = sigma, mu = mu, lambda = t_costs[i])
-  
-  collect_weights[[i]] = weights
-}
-
-
+naive_weights = 1/ncol(sigma) * rep(1,ncol(sigma))
 
 transactions_costs <- expand_grid(lambda = 20 * qexp((1:99)/100)) %>%
   mutate(weights = map(.x = lambda,
@@ -171,7 +167,7 @@ transactions_costs <- expand_grid(lambda = 20 * qexp((1:99)/100)) %>%
                          sigma = sigma,
                          mu = mu,
                          lambda = .x / 10000,
-                         w_prev = 1/ncol(sigma) * rep(1,ncol(sigma))
+                         w_prev = naive_weights
                          
                        )
                        ),
@@ -185,7 +181,79 @@ transactions_costs %>%
        y = "Distance from naive",
        title = "Optimal portfolio weights for different transaction cost")
 
+remove(transactions_costs, mu, sigma)
+
 ```
 
 The higher the level of transaction costs, the closer will the optimal portfolio be to the equal-weighted. 
+
+### Implement a full-fledged portfolio backtesting strategy with transaction costs proportional to risk as above and suppose that λ = 200/10000 = 200bp. 
+
+```{r}
+# For the backtest, we recompute optimal weights just based on past available data.
+
+window_length <- 50
+periods <-  nrow(ret_matrix) - window_length
+lambda = 200/10000
+
+performance_values <- matrix(NA,
+                             nrow = periods,
+                             ncol = 3)
+
+colnames(performance_values) = c("raw_return","turnover","net_return")
+
+
+performance_values <- list("MV (TC)" = performance_values, 
+                           "MV (No SS)" = performance_values, 
+                            "Naive" = performance_values)
+
+# Helper function to adjust weights due to returns changing
+adjust_weights <- function(w, next_return){
+  w_prev <- 1 + w * next_return
+  as.numeric(w_prev / sum(as.vector(w_prev)))
+}
+
+# and helper function to calculate performance evaluation: compute realized returns net of transaction costs.
+evaluate_performance <- function(w, w_previous, next_return, lambda){
+  raw_return <- as.matrix(next_return) %*% w
+  turnover <- sum(abs(w - w_previous))
+  net_return <- raw_return - lambda * turnover
+  c(raw_return, turnover, net_return)
+}
+
+```
+
+
+```{r}
+# The following code chunk performs rolling-window estimation:
+
+for (p in 1:periods) {
+  
+  returns_window <- ret_matrix[p : (p + window_length - 1), ] # window of return rows. window of rows and all columns
+  one_ahead_return <- ret_matrix[p + window_length,] # Next periods return
+  
+  sigma <- cov(returns_window)
+  mu  <- colMeans(returns_window)
+  
+  # Transaction cost-adjusted portfolio:
+  w_MV_TC <- efficient_weights(mu = mu,
+                                    sigma = sigma,
+                                    lambda = lambda,
+                                    w_prev = naive_weights
+                                    )
+  
+  performance_values[[1]][p,] <- evaluate_performance(w = w_MV_TC,
+                                                      w_previous = naive_weights,
+                                                      next_return = one_ahead_return,
+                                                      lambda = lambda
+                                                      )
+  
+  naive_weights = adjust_weights(w_MV_TC, one_ahead_return) # In the first period, this is the naive weight (1/N), but in the second and forward we adjust it. 
+  
+  
+}
+
+
+```
+
 
