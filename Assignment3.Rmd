@@ -47,6 +47,7 @@ crsp_monthly <- tbl(tidy_finance, "crsp_monthly") %>%
 
 remove(tidy_finance)
 ```
+
 To keep the analysis simple we work with a balanced panel and exclude tickers, which is not traded for the full period. 
 ```{r}
 
@@ -138,14 +139,12 @@ efficient_weights <- function(mu, sigma, gamma = 4,
 ```{r}
 # We will need a a (T x N) matrix of returns to compute a matrix of returns: 
 ret_matrix <- data %>%
-  group_by(permno) %>%
   select(-industry) %>%
   pivot_wider(
     names_from = permno,
     values_from = ret_excess
   ) %>% 
-  select(-month) %>%
-  drop_na() 
+  select(-month)
 
 
 # using the returns matrix, we can compute the covariance matrix 
@@ -193,7 +192,7 @@ The higher the level of transaction costs, the closer will the optimal portfolio
 ```{r}
 # For the backtest, we recompute optimal weights just based on past available data.
 
-window_length <- 50
+window_length <- 150
 periods <-  nrow(ret_matrix) - window_length
 lambda = 200/10000
 
@@ -239,40 +238,56 @@ for (p in 1:periods) {
   sigma <- cov(returns_window)
   mu  <- colMeans(returns_window)
   
-  # Mean-variance transaction cost-adjusted portfolio:
   
+
+  
+  # Mean-variance transaction cost-adjusted portfolio:
+
   w_MV_TC <- efficient_weights(mu = mu,
                                     sigma = sigma,
                                     lambda = lambda,
-                                    w_prev = naive_weights
+                                    w_prev = w_prev_1 # first naive, then adjusted. 
                                     )
   
   performance_values[[1]][p,] <- evaluate_performance(w = w_MV_TC,
-                                                      w_previous = naive_weights,
+                                                      w_previous = w_prev_1,
                                                       next_return = one_ahead_return,
                                                       lambda = lambda
                                                       )
   
   w_prev_1 = adjust_weights(w_MV_TC, one_ahead_return) # In the first period, this is the naive weight (1/N), but in the second and forward we adjust it. 
   
-  # Mean-variance without short-selling portfolio (still with transaction costs):
+
+ # Mean-variance without short-selling portfolio (still with transaction costs):
+  
   w_MV_NSS <- solve.QP(Dmat = 4 * sigma,
                        dvec = mu,
-                       Amat = cbind(1,diag(ncol(ret_matrix))),
-                       bvec = c(1,rep(0, ncol(ret_matrix))),
+                       Amat = cbind(1,diag(ncol(returns_window))),
+                       bvec = c(1,rep(0, ncol(returns_window))),
                        meq = 1
-                       )
+                       )$solution
   
+  
+  performance_values[[2]][p,] <- evaluate_performance(w = w_MV_NSS,
+                                                      w_previous = w_prev_2,
+                                                      next_return = one_ahead_return,
+                                                      lambda = lambda
+                                                      ) 
+  
+
+
   
   # Naive portfolio allocation:
   
   performance_values[[3]][p,] <- evaluate_performance(w = naive_weights,
-                                                      w_previous = naive_weights,
+                                                      w_previous = w_prev_3,
                                                       next_return = one_ahead_return,
-                                                      lambda = 0)
+                                                      lambda = lambda)
   
   w_prev_3 = adjust_weights(naive_weights, one_ahead_return)
   
+
+
 }
 
 ```
