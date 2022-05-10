@@ -31,6 +31,8 @@ library(data.table)
 library(vtable)
 library(keras)
 library(quadprog)
+library(rmgarch)
+library(xts)
 ```
 
 
@@ -113,9 +115,7 @@ remove(table,plot,ggtable, lineplot, figure)
 ```{r}
 # Function to compute optimal portfolio weigths based on inputs. 
 
-efficient_weights <- function(mu, sigma, gamma = 4, 
-                              lambda, w_prev
-) {
+efficient_weights <- function(mu, sigma, gamma = 4, lambda, w_prev) {
   
   iota <- rep(1, ncol(sigma))
   
@@ -152,6 +152,55 @@ sigma <- cov(ret_matrix)
 mu <- colMeans(ret_matrix) # extract the sample mean returns from the return matrix
 
 remove(data)
+
+```
+
+```{r}
+# Ledoit-Wolf estimation
+compute_ledoit_wolf <- function(x) {
+  # Computes Ledoit-Wolf shrinkage covariance estimator
+  # This function generates the Ledoit-Wolf covariance estimator  as proposed in Ledoit, Wolf 2004 (Honey, I shrunk the sample covariance matrix.)
+  # X is a (t x n) matrix of returns
+  t <- nrow(x)
+  n <- ncol(x)
+  x <- apply(x, 2, function(x) if (is.numeric(x)) # demean x
+    x - mean(x) else x)
+  sample <- (1/t) * (t(x) %*% x)
+  var <- diag(sample)
+  sqrtvar <- sqrt(var)
+  rBar <- (sum(sum(sample/(sqrtvar %*% t(sqrtvar)))) - n)/(n * (n - 1))
+  prior <- rBar * sqrtvar %*% t(sqrtvar)
+  diag(prior) <- var
+  y <- x^2
+  phiMat <- t(y) %*% y/t - 2 * (t(x) %*% x) * sample/t + sample^2
+  phi <- sum(phiMat)
+
+  repmat = function(X, m, n) {
+    X <- as.matrix(X)
+    mx = dim(X)[1]
+    nx = dim(X)[2]
+    matrix(t(matrix(X, mx, nx * n)), mx * m, nx * n, byrow = T)
+  }
+
+  term1 <- (t(x^3) %*% x)/t
+  help <- t(x) %*% x/t
+  helpDiag <- diag(help)
+  term2 <- repmat(helpDiag, 1, n) * sample
+  term3 <- help * repmat(var, 1, n)
+  term4 <- repmat(var, 1, n) * sample
+  thetaMat <- term1 - term2 - term3 + term4
+  diag(thetaMat) <- 0
+  rho <- sum(diag(phiMat)) + rBar * sum(sum(((1/sqrtvar) %*% t(sqrtvar)) * thetaMat))
+
+  gamma <- sum(diag(t(sample - prior) %*% (sample - prior)))
+  kappa <- (phi - rho)/gamma
+  shrinkage <- max(0, min(1, kappa/t))
+  if (is.nan(shrinkage))
+    shrinkage <- 1
+  sigma <- shrinkage * prior + (1 - shrinkage) * sample
+  return(sigma)
+}
+
 
 ```
 
@@ -198,16 +247,17 @@ lambda = 200/10000
 
 performance_values <- matrix(NA,
                              nrow = periods,
-                             ncol = 3)
+                             ncol = 3) 
 
 colnames(performance_values) = c("raw_return","turnover","net_return")
 
 
-performance_values <- list("MV (TC)" = performance_values, 
+performance_values <- list("MV (TC)" = performance_values,
                            "MV (No SS)" = performance_values, 
-                            "Naive" = performance_values)
+                            "Naive" = performance_values,
+                           "MV (TC,reg)" = performance_values)
 
-w_prev_1 <- w_prev_2 <- w_prev_3 <- naive_weights
+w_prev_1 <- w_prev_2 <- w_prev_3 <- w_prev_4 <- naive_weights # Initial weights of all portfolios
 
 # Helper function to adjust weights due to returns changing
 adjust_weights <- function(w, next_return){
@@ -237,14 +287,12 @@ for (p in 1:periods) {
   
   sigma <- cov(returns_window)
   mu  <- colMeans(returns_window)
-  
-  
-
+  sigma_lw <- compute_ledoit_wolf(returns_window)
   
   # Mean-variance transaction cost-adjusted portfolio:
 
   w_MV_TC <- efficient_weights(mu = mu,
-                                    sigma = sigma,
+                                    sigma = sigma_lw,
                                     lambda = lambda,
                                     w_prev = w_prev_1 # first naive, then adjusted. 
                                     )
@@ -255,12 +303,12 @@ for (p in 1:periods) {
                                                       lambda = lambda
                                                       )
   
-  w_prev_1 = adjust_weights(w_MV_TC, one_ahead_return) # In the first period, this is the naive weight (1/N), but in the second and forward we adjust it. 
+  w_prev_1 = adjust_weights(w_MV_TC, one_ahead_return)
   
 
  # Mean-variance without short-selling portfolio (still with transaction costs):
   
-  w_MV_NSS <- solve.QP(Dmat = 4 * sigma,
+  w_MV_NSS <- solve.QP(Dmat = 4 * sigma_lw,
                        dvec = mu,
                        Amat = cbind(1,diag(ncol(returns_window))),
                        bvec = c(1,rep(0, ncol(returns_window))),
@@ -274,7 +322,7 @@ for (p in 1:periods) {
                                                       lambda = lambda
                                                       ) 
   
-
+w_prev_2 = adjust_weights(w_MV_NSS, one_ahead_return)
 
   
   # Naive portfolio allocation:
@@ -287,9 +335,91 @@ for (p in 1:periods) {
   w_prev_3 = adjust_weights(naive_weights, one_ahead_return)
   
 
+  
+  
+  # Mean-variance transaction cost-adjusted portfolio with regular variance-covariance matrix:
+
+  w_MV_TC_REG <- efficient_weights(mu = mu,
+                                    sigma = sigma,
+                                    lambda = lambda,
+                                    w_prev = w_prev_4 # first naive, then adjusted. 
+                                    )
+  
+  performance_values[[4]][p,] <- evaluate_performance(w = w_MV_TC_REG,
+                                                      w_previous = w_prev_4,
+                                                      next_return = one_ahead_return,
+                                                      lambda = lambda
+                                                      )
+  
+  w_prev_4 = adjust_weights(w_MV_TC_REG, one_ahead_return) # In the first period, this is the naive weight (1/N), but in the second and forward we adjust it. 
 
 }
 
+
+
+
 ```
 
+
+```{r}
+
+ret_matrix.xts <- xts(ret_matrix %>% select(-month), order.by = ret_matrix$month)
+
+N <- ncol(ret_matrix.xts)
+
+# Specify GARCH model:
+spec <- ugarchspec(variance.model = list(model = 'sGARCH',
+                                         garchOrder = c(1,1)))
+
+# replicate the specification for each of our N assets:
+mspec <- multispec(replicate(N, spec))
+
+# Specify DCC:
+mspec_dcc <- dccspec(mspec,
+                     model = "DCC",
+                     distribution = "mvnorm")
+
+cl <- makeCluster(4)
+
+fit <- dccfit(mspec_dcc, 
+               out.sample = 0,
+               data = ret_matrix.xts, 
+               cluster = cl,
+               fit.control = list(eval.se = FALSE,
+                                  stationarity = TRUE))
+
+dccforecast
+
+  
+
+dccrolln <- dccroll(mspec_dcc, 
+                   data = ret_matrix.xts, 
+                   n.ahead = 1,
+                   forecast.length = 3, 
+                   refit.every = 1,
+                   refit.window = "recursive", 
+                   fit.control=list(scale=TRUE),
+                   solver.control=list(trace=1),
+                   cluster = cl)
+
+
+
+
+stopCluster(cl)
+
+pred <- apply(rcov(dccrolln), 3, function(x){ 
+  w <- solve(x %>% as.matrix()) %*% rep(1, N)
+  return(w/sum(w))}) %>% 
+  t()
+
+apply(pred * ret_matrix.xts %>% tail(581), 1, sum) %>% 
+  enframe() %>% 
+  summarise(sd = sqrt(250) * sd(value))
+
+test = rcov(dccrolln)
+
+
+
+
+```
 
