@@ -35,7 +35,9 @@ library(rmgarch)
 library(xts)
 ```
 
+### 1.1 Select all stocks from the CRSP universe with uninterrupted history such that you obtain a balanced panel of monthly (excess) returns for the entire time series from 1962 until 2020. Provide a brief summary of the sample: How many stocks does your investment universe consist of?
 
+We start by loading the CRSP set.
 ```{r}
 # Select all stocks from the CRSP universe
  tidy_finance <- dbConnect(SQLite(), "/Users/fredlundahl/Desktop/AEF/data/tidy_finance.sqlite",
@@ -64,6 +66,7 @@ data <- crsp_monthly %>%
 remove(crsp_monthly)
 ```
 
+We now turn to produce the summary statistics. From the plot, we find that the universe consists of 731 stocks.
 ```{r, fig.align = 'center'}
 # Provide a brief summary of the sample:
 
@@ -112,6 +115,7 @@ remove(table,plot,ggtable, lineplot, figure)
 
 ### 2.2 Write a function that computes the optimal weights ω∗t+1 based on the inputs μ,Σ,γ,λ and the current weights ωt+. You can assume γ = 4 throughout the entire assignment.
 
+To find the optimal weight we incorporate the compute_efficient_weights function from chapter 11.4 in (Scheuss et. al 2022), where mu denotes the historical mean return, sigma is the covariance matrix, gamma is the coefficient of risk aversion (4 by prespecification), lambda is the transaction costs and w_prev is the weight before rebalancing. The function calculates the efficient portfolio weight in general form, while allowing for transaction costs. The transaction costs are conditional on the holdings before reallocation. If lamda (i.e. the transaction costs) are zero, the computation resembles the standard mean-variance efficient framework (CAPM), where the aim is to maximize the sharpe ratio.
 ```{r}
 # Function to compute optimal portfolio weights based on inputs. 
 
@@ -136,6 +140,7 @@ efficient_weights <- function(mu, sigma, gamma = 4, lambda, w_prev) {
 
 #### 2.3 Use the full sample of your data to compute sample mean returns and the sample variance covariance matrix.
 
+First we calculate the return matric, where the entire series of returns for each stock is obtained. From this it is possible to calculate the historical mean (mu) and covariance matrix (sigma).
 ```{r}
 # We will need a a (T x N) matrix of returns to compute a matrix of returns: 
 ret_matrix <- data %>%
@@ -155,6 +160,7 @@ remove(data)
 
 ```
 
+Next we perform Ledoit-Wolf shrinkage on the variance-covariance matrix. This comes in handy, as the method serves as an effective way of overcoming issues related to var-covar matrices in large dimensions. The function is rather complex, why we refer the reader to chapter 9.2 in "Exercises for Advanced Empirical Finance: Topics and Data Science" by (Scheuss et. al 2022) for a deeper explanation.
 ```{r}
 # Ledoit-Wolf estimation
 compute_ledoit_wolf <- function(x) {
@@ -240,6 +246,10 @@ The higher the level of transaction costs, the closer will the optimal portfolio
 
 ### 3. Implement a full-fledged portfolio backtesting strategy with transaction costs proportional to risk as above and suppose that λ = 200/10000 = 200bp. 
 
+With rolling window forecasts, we recursively re estimate the model and store the one ahead covariance forecasts.  
+
+
+
 ```{r}
 # For the backtest, we recompute optimal weights just based on past available data.
 
@@ -274,20 +284,7 @@ evaluate_performance <- function(w, w_previous, next_return, lambda){
   net_return <- raw_return - lambda * turnover
   c(raw_return, turnover, net_return)
 }
-
-
 ```
-
-#  Rolling Window multivariate DCC Garch
-
-With rolling window forecasts, we recursively re estimate the GARCH model and store the one ahead covariance forecasts. Since we make use of a dynamic model, we also store conditional means. The DCC Garch 
-
-
-
-Dynamic Conditional Correlations
-
-
-
 
 
 ```{r}
@@ -368,9 +365,6 @@ w_prev_2 = adjust_weights(w_MV_NSS, one_ahead_return)
 
 }
 
-
-
-
 ```
 
 
@@ -415,9 +409,6 @@ dccrolln <- dccroll(mspec_dcc,
                    solver.control=list(trace=1),
                    cluster = cl)
 
-
-
-
 stopCluster(cl)
 
 pred <- apply(rcov(dccrolln), 3, function(x){ 
@@ -430,9 +421,5 @@ apply(pred * ret_matrix.xts %>% tail(581), 1, sum) %>%
   summarise(sd = sqrt(250) * sd(value))
 
 test = rcov(dccrolln)
-
-
-
-
 ```
 
