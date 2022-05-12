@@ -38,7 +38,7 @@ library(xts)
 
 ```{r}
 # Select all stocks from the CRSP universe
- tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
+ tidy_finance <- dbConnect(SQLite(), "/Users/fredlundahl/Desktop/AEF/data/tidy_finance.sqlite",
                            extended_types = TRUE)
 
 # Reading in crsp_monthly dataset
@@ -113,7 +113,7 @@ remove(table,plot,ggtable, lineplot, figure)
 ### 2.2 Write a function that computes the optimal weights ω∗t+1 based on the inputs μ,Σ,γ,λ and the current weights ωt+. You can assume γ = 4 throughout the entire assignment.
 
 ```{r}
-# Function to compute optimal portfolio weigths based on inputs. 
+# Function to compute optimal portfolio weights based on inputs. 
 
 efficient_weights <- function(mu, sigma, gamma = 4, lambda, w_prev) {
   
@@ -204,6 +204,7 @@ compute_ledoit_wolf <- function(x) {
 
 ```
 
+
 #### 2.3 Suppose that the initial portfolio ωt+is the naive, equal weighted allocation and the investor has a risk aversion of γ = 4. Compute the optimal portfolio ω∗t+1(λ) for different values of the transaction cost parameter λ.
 ```{r, fig.width=8, fig.height=4}
 # To calculate the optimal portfolio with 1/N initial we will use the hard-coded weight parameter from the function, as this provides an initially equal-weighted portfolio.
@@ -233,10 +234,11 @@ transactions_costs %>%
 remove(transactions_costs, mu, sigma)
 
 ```
+# What do you conclude about the effect of turnover penalization?
+The higher the level of transaction costs, the closer will the optimal portfolio be to the equal-weighted. Turnover penalization will make the investor reluctant towards making trades, as it is costly, and therefore choose appropriate portfolio-weights.
 
-The higher the level of transaction costs, the closer will the optimal portfolio be to the equal-weighted. 
 
-### Implement a full-fledged portfolio backtesting strategy with transaction costs proportional to risk as above and suppose that λ = 200/10000 = 200bp. 
+### 3. Implement a full-fledged portfolio backtesting strategy with transaction costs proportional to risk as above and suppose that λ = 200/10000 = 200bp. 
 
 ```{r}
 # For the backtest, we recompute optimal weights just based on past available data.
@@ -275,6 +277,17 @@ evaluate_performance <- function(w, w_previous, next_return, lambda){
 
 
 ```
+
+#  Rolling Window multivariate DCC Garch
+
+With rolling window forecasts, we recursively re estimate the GARCH model and store the one ahead covariance forecasts. Since we make use of a dynamic model, we also store conditional means. The DCC Garch 
+
+
+
+Dynamic Conditional Correlations
+
+
+
 
 
 ```{r}
