@@ -52,7 +52,7 @@ crsp_monthly <- tbl(tidy_finance, "crsp_monthly") %>%
 remove(tidy_finance)
 ```
 
-To keep the analysis simple we work with a balanced panel and exclude tickers, which is not traded for the full period. 
+To keep the analysis simple we work with a balanced panel and exclude tickers, which are not traded for the full period. 
 ```{r}
 
 # Clean data by removing stocks, which is not traded on every single trading day. 
@@ -213,8 +213,7 @@ compute_ledoit_wolf <- function(x) {
 
 #### 2.3 Suppose that the initial portfolio ωt+ is the naive, equal weighted allocation and the investor has a risk aversion of γ = 4. Compute the optimal portfolio ω∗t+1(λ) for different values of the transaction cost parameter λ.
 
-To calculate the optimal portfolio with 1/N initial we will use the hard-coded weight parameter from the function, as this provides an initially equal-weighted portfolio. 
-
+To calculate the optimal portfolio with 1/N initial we will use the hard-coded weight parameter from the function, as this provides an initially equally-weighted portfolio. 
 ```{r, fig.width=8, fig.height=4}
 # Creating the initial naive weight
 naive_weights = 1/ncol(sigma) * rep(1,ncol(sigma))
@@ -248,17 +247,15 @@ remove(transactions_costs, mu, sigma)
 
 ```
 # What do you conclude about the effect of turnover penalization?
-The higher the level of transaction costs, the closer will the optimal portfolio be to the equal-weighted. Turnover penalization will make the investor reluctant towards making trades, as it is costly, and therefore choose appropriate portfolio-weights.
+The higher the level of transaction costs, the closer will the optimal portfolio will be to the equally-weighted. Turnover penalization will make the investor reluctant towards making trades, as it is costly, and therefore choose appropriate portfolio-weights. This also makes sense as increasing transaction costs implies a higher demanded return - at some point, the costs just will not outweight the gains from the transactions, why investors will be reluctant to rebalance their portfolio. 
 
 
 ### 3. Implement a full-fledged portfolio backtesting strategy with transaction costs proportional to risk as above and suppose that λ = 200/10000 = 200bp. 
 
-With rolling window forecasts, we recursively re estimate the model and store the one ahead covariance forecasts.  
-
-
+With rolling window forecasts, we recursively re-estimate the model and store the one ahead covariance forecasts. We implement the strategy in the following way. For the backtesting, we recompute optimal weight based purely on past available data. We use a window length of 150 periods which gives us 333 periods of performance. We test three strategies: A transaction cost-adjusted portfolio (MV (TC)), a mean-variance portfolio without short-selling, but with transaction costs (MV (No SS)) and an equally weighted naive portfolio (Naive). Initial weights are set as a equally weighted portfolio and we evaluate the portfolios through the mean returns nets of transaction costs, std. deviation of returns net of transaction costs, the sharpe ratio and the portfolio turnover.    
 
 ```{r}
-# For the backtest, we recompute optimal weights just based on past available data.
+# recomputing optimal weights
 
 window_length <- 150
 periods <-  nrow(ret_matrix) - window_length
@@ -283,7 +280,7 @@ adjust_weights <- function(w, next_return){
   as.numeric(w_prev / sum(as.vector(w_prev)))
 }
 
-# and helper function to calculate performance evaluation: compute realized returns net of transaction costs.
+# Helper function to calculate performance evaluation: compute realized returns net of transaction costs.
 evaluate_performance <- function(w, w_previous, next_return, lambda){
   raw_return <- as.matrix(next_return) %*% w
   turnover <- sum(abs(w - w_previous))
@@ -293,7 +290,7 @@ evaluate_performance <- function(w, w_previous, next_return, lambda){
 
 ```
 
-
+With the helper functions, we are ready to perform the rolling-window estimation. This is done using a for loop through all the periods. Lastly, the performance is evaluated through the summarized key figures.
 ```{r}
 # The following code chunk performs rolling-window estimation:
 
@@ -366,4 +363,9 @@ performance %>%
     Turnover = mean(turnover)
   )
 ```
+# Discuss the results: Which portfolio strategy performed best after adjusting for transaction costs and what are possible reasons for the differences in performance?
+As presented in the above table, the best performing strategy is the naive portfolio, where we rebalance to an equally weighted portfolio in each period. Using this strategy, we are able to generate a mean return of 9.83% which is significantly better than both of the other strategies. Moreover, the sharpe ratio suggest that the naive portfolio handles risk more efficiently than both of the other portfolios. It also becomes evident that transaction costs tend to kill returns, as both the naive and the portfolio with no short-selling strongly outperforms the transaction cost-adjusted portfolio. We thus see a negative correlation between turnover and returns, which underlines the importance of accounting for transaction costs when building a trading strategy. 
+
+# Discuss: would you consider the backtesting results as a “true” out-of-sample experiment? Why? Why not?
+
 
