@@ -140,7 +140,7 @@ efficient_weights <- function(mu, sigma, gamma = 4, lambda, w_prev) {
 
 #### 2.3 Use the full sample of your data to compute sample mean returns and the sample variance covariance matrix.
 
-First we calculate the return matric, where the entire series of returns for each stock is obtained. From this it is possible to calculate the historical mean (mu) and covariance matrix (sigma).
+First we calculate the return matrix, where the entire series of returns for each stock is obtained. From this it is possible to calculate the historical mean (mu) and covariance matrix (sigma).
 ```{r}
 # We will need a a (T x N) matrix of returns to compute a matrix of returns: 
 ret_matrix <- data %>%
@@ -211,10 +211,12 @@ compute_ledoit_wolf <- function(x) {
 ```
 
 
-#### 2.3 Suppose that the initial portfolio ωt+is the naive, equal weighted allocation and the investor has a risk aversion of γ = 4. Compute the optimal portfolio ω∗t+1(λ) for different values of the transaction cost parameter λ.
-```{r, fig.width=8, fig.height=4}
-# To calculate the optimal portfolio with 1/N initial we will use the hard-coded weight parameter from the function, as this provides an initially equal-weighted portfolio.
+#### 2.3 Suppose that the initial portfolio ωt+ is the naive, equal weighted allocation and the investor has a risk aversion of γ = 4. Compute the optimal portfolio ω∗t+1(λ) for different values of the transaction cost parameter λ.
 
+To calculate the optimal portfolio with 1/N initial we will use the hard-coded weight parameter from the function, as this provides an initially equal-weighted portfolio. 
+
+```{r, fig.width=8, fig.height=4}
+# Creating the initial naive weight
 naive_weights = 1/ncol(sigma) * rep(1,ncol(sigma))
 
 transactions_costs <- expand_grid(lambda = 20 * qexp((1:99)/100)) %>%
