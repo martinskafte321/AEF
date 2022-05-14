@@ -2,7 +2,9 @@
 title: "Assignment3"
 author: "Martin, Oliver and Fred"
 date: "6/5/2022"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE, }
@@ -34,8 +36,6 @@ library(quadprog)
 library(rmgarch)
 library(xts)
 ```
-
-### 1.1 Select all stocks from the CRSP universe with uninterrupted history such that you obtain a balanced panel of monthly (excess) returns for the entire time series from 1962 until 2020. Provide a brief summary of the sample: How many stocks does your investment universe consist of?
 
 We start by loading the CRSP set.
 ```{r}
@@ -110,10 +110,6 @@ remove(table,plot,ggtable, lineplot, figure)
 
 ```
 
-### 2.1 Derive a closed-form solution for the mean-variance efficient portfolio ω∗t+1 based on the transaction cost specification above. Discuss if the assumption of transaction costs proportional to volatility makes sense.
-
-
-### 2.2 Write a function that computes the optimal weights ω∗t+1 based on the inputs μ,Σ,γ,λ and the current weights ωt+. You can assume γ = 4 throughout the entire assignment.
 
 To find the optimal weight we incorporate the compute_efficient_weights function from chapter 11.4 in (Scheuss et. al 2022), where mu denotes the historical mean return, sigma is the covariance matrix, gamma is the coefficient of risk aversion (4 by prespecification), lambda is the transaction costs and w_prev is the weight before rebalancing. The function calculates the efficient portfolio weight in general form, while allowing for transaction costs. The transaction costs are conditional on the holdings before reallocation. If lamda (i.e. the transaction costs) are zero, the computation resembles the standard mean-variance efficient framework (CAPM), where the aim is to maximize the sharpe ratio.
 ```{r}
@@ -138,7 +134,6 @@ efficient_weights <- function(mu, sigma, gamma = 4, lambda, w_prev) {
 ```
 
 
-#### 2.3 Use the full sample of your data to compute sample mean returns and the sample variance covariance matrix.
 
 First we calculate the return matrix, where the entire series of returns for each stock is obtained. From this it is possible to calculate the historical mean (mu) and covariance matrix (sigma).
 ```{r}
@@ -211,7 +206,7 @@ compute_ledoit_wolf <- function(x) {
 ```
 
 
-#### 2.3 Suppose that the initial portfolio ωt+ is the naive, equal weighted allocation and the investor has a risk aversion of γ = 4. Compute the optimal portfolio ω∗t+1(λ) for different values of the transaction cost parameter λ.
+
 
 To calculate the optimal portfolio with 1/N initial we will use the hard-coded weight parameter from the function, as this provides an initially equally-weighted portfolio. 
 ```{r, fig.width=8, fig.height=4}
@@ -246,11 +241,12 @@ transactions_costs %>%
 remove(transactions_costs, mu, sigma)
 
 ```
-# What do you conclude about the effect of turnover penalization?
+
+
 The higher the level of transaction costs, the closer will the optimal portfolio will be to the equally-weighted. Turnover penalization will make the investor reluctant towards making trades, as it is costly, and therefore choose appropriate portfolio-weights. This also makes sense as increasing transaction costs implies a higher demanded return - at some point, the costs just will not outweight the gains from the transactions, why investors will be reluctant to rebalance their portfolio. 
 
 
-### 3. Implement a full-fledged portfolio backtesting strategy with transaction costs proportional to risk as above and suppose that λ = 200/10000 = 200bp. 
+ 
 
 With rolling window forecasts, we recursively re-estimate the model and store the one ahead covariance forecasts. We implement the strategy in the following way. For the backtesting, we recompute optimal weight based purely on past available data. We use a window length of 150 periods which gives us 333 periods of performance. We test three strategies: A transaction cost-adjusted portfolio (MV (TC)), a mean-variance portfolio without short-selling, but with transaction costs (MV (No SS)) and an equally weighted naive portfolio (Naive). Initial weights are set as a equally weighted portfolio and we evaluate the portfolios through the mean returns nets of transaction costs, std. deviation of returns net of transaction costs, the sharpe ratio and the portfolio turnover.    
 
@@ -361,11 +357,13 @@ performance %>%
     SD = 12 * sd(100 * raw_return),
     'Sharpe Ratio' = if_else(Mean > 0, Mean / SD, NA_real_),
     Turnover = mean(turnover)
-  )
+  ) %>% kbl(caption = "Summary of portfolio performance",digits = 2) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
 ```
-# Discuss the results: Which portfolio strategy performed best after adjusting for transaction costs and what are possible reasons for the differences in performance?
+
+
 As presented in the above table, the best performing strategy is the naive portfolio, where we rebalance to an equally weighted portfolio in each period. Using this strategy, we are able to generate a mean return of 9.83% which is significantly better than both of the other strategies. Moreover, the sharpe ratio suggest that the naive portfolio handles risk more efficiently than both of the other portfolios. It also becomes evident that transaction costs tend to kill returns, as both the naive and the portfolio with no short-selling strongly outperforms the transaction cost-adjusted portfolio. We thus see a negative correlation between turnover and returns, which underlines the importance of accounting for transaction costs when building a trading strategy. 
 
-# Discuss: would you consider the backtesting results as a “true” out-of-sample experiment? Why? Why not?
+
 An argument for the out-of-sample experiment being "true" is that the observations used to estimate sigma (i.e., the training data) are not the one's used for the prediction. Thus, the forecast is made using a set of un-used observations, which, by definition, makes it an out-of-sample experiment. However, the experiments aim of testing how transaction costs affects the performance by rebalancing ex ante is made using some relatively unrealistic assumptions on the structure of transaction costs as we use a standardized cost of 200 bps for all transactions. As this does not reflect the true cost structure in the market, one could argue that the results fail to present a real representation of the effect of transaction costs. 
 
