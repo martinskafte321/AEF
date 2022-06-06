@@ -1,7 +1,7 @@
 ---
-title: "AEFassignment1"
-author: "Martin, Fred and Oliver"
-date: "6/3/2022"
+title: "MA 1: The Momentum Effect"
+author: "tgx333 \\ lhb642 \\ "
+date: "11/6/2022"
 output:
   html_document: default
   pdf_document: default
@@ -58,18 +58,18 @@ crsp_monthly <- crsp_monthly %>%
   left_join(factors_ff_monthly, by = "month") %>%
   select(permno, month, ret, rf, ret_excess, mkt_excess, mktcap,mktcap_lag) #selecting these columns from our joint set
 ```
-# 1. 
+### 1. 
 **Very briefly state the definition of the variables permno, ret_excess and mktcap.**
 
-Definition of PERMNO, as per {PERMNO}: "PERMNO is a unique permanent security identification number assigned by CRSP to each security". Thus PERMNO is a unique company identifier. \\
+PERMNO is a unique permanent security identification number assigned by CRSP to each security. Thus, PERMNO is a unique company identifier. \\
 
-Definition of excess returns, as per {exret}: Excess return for a stock is the difference between the stock return and the return on the risk-free security over the same period. For such risk-free securities, it is common to use a government bond such as a 10-year US Treasury bond.\\ 
+Excess return for a stock is the difference between the stock return and the return on the risk-free security over the same period. For such risk-free securities, it is common to use a government bond such as a 10-year US Treasury bond.\\ 
 
-Definition of mktcap, as per {mktcap}: The variable 'mktcap' is defined as the market capitalization, which refers to the total dollar market value of a company's outstanding shares of stock. Market capitalization is commonly referred to as "market cap," and is calculated by multiplying the total number of a company's outstanding shares by the current market price of one share.\\
+The variable 'mktcap' is defined as the market capitalization, which refers to the total dollar market value of a company's shares outstanding. Market capitalization is commonly referred to as "market cap," and is calculated by multiplying the total number of a company's outstanding shares by the current share market price.\\
 
 **Provide suitable summary statistics of the cross-section of monthly excess returns and market capitalization in the CRSP sample.**
+
 ```{r}
-'There is probably a smarter way to do this, but this method includes creating two seperate summary statistics. One can do the summary statistics across a variable. '
 
 #Creating summary statistics for the excess return
 ret = crsp_monthly %>% 
@@ -79,10 +79,13 @@ ret = crsp_monthly %>%
     list(daily_mean = mean,
          daily_sd = sd,
          daily_min = min,
+         q25 = ~quantile(., 0.25),
+         median = median,
+         q75 = ~quantile(., 0.75),
          daily_max = max
          ) 
   )) %>% summarise(across(-month,mean)) %>%
-  rename(mean=ret_excess_daily_mean, sd=ret_excess_daily_sd, min=ret_excess_daily_min, max=ret_excess_daily_max) %>%
+  rename(mean=ret_excess_daily_mean, sd=ret_excess_daily_sd, min=ret_excess_daily_min, max=ret_excess_daily_max, q25=ret_excess_q25, q75=ret_excess_q75, median=ret_excess_median) %>%
   pivot_longer(
     everything()
   ) %>% 
@@ -97,6 +100,9 @@ mkt = crsp_monthly %>%
     list(daily_mean = mean,
          daily_sd = sd,
          daily_min = min,
+         q25 = ~quantile(., 0.25),
+         median = median,
+         q75 = ~quantile(., 0.75),
          daily_max = max
          ) 
   )) %>% summarise(across(-month,mean)) %>%
@@ -110,9 +116,39 @@ mkt = crsp_monthly %>%
 #Merging the summary statistics so that they are presented for both excess returns and market cap
 ret %>% 
   cbind(mkt) %>%
-  select(-n) %>% pander::pander()
+  select(-n) %>% kbl(caption = "Summary statistics for monthly excess returns and market capitalization",digits = 2) %>%
+  kable_classic(full_width = F, html_font = "Cambria") %>%
+  
 
-remove(ret,mkt) #Removing these variables to get a cleaner environment. 
+#remove(ret,mkt) #Removing these variables to get a cleaner environment. 
+
+
+
+summaryret <- crsp_monthly %>%
+  group_by(month) %>%
+  summarise(across(ret_excess,
+                  list(mean = mean, sd = sd, min = min,
+                    q25 = ~quantile(., 0.25),
+                    median = median,
+                    q75 = ~quantile(., 0.75), max = max),
+                  .names = "{.fn}")) %>%
+  summarise(across(-month, mean)) %>% add_column('Variable' = "ret_excess")
+
+
+#Summary statistics for mktcap
+summarymkt <- crsp_monthly %>%
+  group_by(month) %>%
+  summarise(across(mktcap,
+                  list(mean = mean, sd = sd, min = min,
+                    q25 = ~quantile(., 0.25),
+                    median = median,
+                    q75 = ~quantile(., 0.75), max = max), .names = "{.fn}")) %>%
+  summarise(across(-month, mean)) %>% add_column('Variable' = "mktcap")
+
+
+#Combine statistics into one tibble 
+table1 <- rbind(summaryret, summarymkt) %>% relocate(Variable) %>% kbl(caption = "Summary statistics for monthly excess returns and market capitalization",digits = 2) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
 ```
 Summary statistics for ret_excess and mktcap shows that the mean return per month is 0.79% although the median is -0.0004%. An important distinction between the variables is that ret_excess is in relative numbers, while mktcap of course is absolute, since the return is a relative change and market cap is a true number. 
 
