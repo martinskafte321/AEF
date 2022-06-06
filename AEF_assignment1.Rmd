@@ -3,8 +3,8 @@ title: "AEFassignment1"
 author: "Martin, Fred and Oliver"
 date: "6/3/2022"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE, warning=FALSE, echo=FALSE}
@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = FALSE)
 
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
-# Loading packages:
+# Loading required packages:
 library(knitr)
 library(RSQLite)
 library(dbplyr)
@@ -31,27 +31,17 @@ library(kableExtra)
 
 ```
 
-### 1. Read in the monthly CRSP date (crsp_monthly) and the monthly market excess returns (factors_ff_monthly) from the tidy_finance.sqlite database. Very briefly state the definition of the variables permno, ret_excess and mktcap. Provide suitable summary statistics of the cross-section of monthly excess returns and market capitalization in the CRSP sample.
 
 ```{r}
 # ******************************************
 # 4.1 Data preparation
 # ******************************************
 
-#Connecting to the database
-
-#tidy_finance <- dbConnect(SQLite(), "/Users/fredlundahl/Desktop/AEF/data/tidy_finance.sqlite", 
-             #extended_types = TRUE)
+# Connecting to the database
 
  tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
                            extended_types = TRUE)
 
-#tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
- #                         extended_types = TRUE)
-
-
-#tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
-                          #extended_types = TRUE)
 
 #Reading in crsp_monthly dataset
 crsp_monthly <- tbl(tidy_finance, "crsp_monthly") %>%
@@ -68,15 +58,16 @@ crsp_monthly <- crsp_monthly %>%
   left_join(factors_ff_monthly, by = "month") %>%
   select(permno, month, ret, rf, ret_excess, mkt_excess, mktcap,mktcap_lag) #selecting these columns from our joint set
 ```
-## Task 1. 
-#### Very briefly state the definition of the variables permno, ret_excess and mktcap*. 
-Definition of PERMNO, as per {PERMNO}: "PERMNO is a unique permanent security identification number assigned by CRSP to each security". Thus PERMNO is a unique company identifier. 
+# 1. 
+**Very briefly state the definition of the variables permno, ret_excess and mktcap.**
+
+Definition of PERMNO, as per {PERMNO}: "PERMNO is a unique permanent security identification number assigned by CRSP to each security". Thus PERMNO is a unique company identifier. \\
 
 Definition of excess returns, as per {exret}: Excess return for a stock is the difference between the stock return and the return on the risk-free security over the same period. For such risk-free securities, it is common to use a government bond such as a 10-year US Treasury bond.\\ 
 
-Definition of mktcap, as per {mktcap}: The variable 'mktcap' is defined as the market capitalization, which refers to the total dollar market value of a company's outstanding shares of stock. Market capitalization is commonly referred to as "market cap," and is calculated by multiplying the total number of a company's outstanding shares by the current market price of one share.
+Definition of mktcap, as per {mktcap}: The variable 'mktcap' is defined as the market capitalization, which refers to the total dollar market value of a company's outstanding shares of stock. Market capitalization is commonly referred to as "market cap," and is calculated by multiplying the total number of a company's outstanding shares by the current market price of one share.\\
 
-#### Provide suitable summary statistics of the cross-section of monthly excess returns and market capitalization in the CRSP sample*
+**Provide suitable summary statistics of the cross-section of monthly excess returns and market capitalization in the CRSP sample.**
 ```{r}
 'There is probably a smarter way to do this, but this method includes creating two seperate summary statistics. One can do the summary statistics across a variable. '
 
@@ -125,16 +116,11 @@ remove(ret,mkt) #Removing these variables to get a cleaner environment.
 ```
 Summary statistics for ret_excess and mktcap shows that the mean return per month is 0.79% although the median is -0.0004%. An important distinction between the variables is that ret_excess is in relative numbers, while mktcap of course is absolute, since the return is a relative change and market cap is a true number. 
 
-## Task 2.
+# 2.
 
-#### Generate a new column ret_excess_lag. Briefly state why crsp_monthly %>% group_by(permno) %>% mutate(ret_excess_lag = lag(ret_excess)) does not provide the correct result if crsp_monthly contains implicitly missing values. 
+**Briefly state why crsp_monthly %>% group_by(permno) %>% mutate(ret_excess_lag = lag(ret_excess)) does not provide the correct result if crsp_monthly contains implicitly missing values.**
 
-# Briefly stating why the provided code gives incorrect results.
-
-If crsp_monthly contains implicitly missing values, this will cause a ret_excess_lag to not necessarily represent the value of the previous month, but the previous value in the dataset. An implicitly missing value then makes a ret_excess_lag value represent the second lagged value. 
-
-
-Even without implicitly missing values, the given code returns a variable with missing values for the first cell of every permno. The following code can be used to avoid missing values.
+If crsp_monthly contains implicitly missing values, this will cause a ret_excess_lag to not necessarily represent the value of the previous month, but the previous value in the dataset. An implicitly missing value then makes a ret_excess_lag value represent the second lagged value. Even without implicitly missing values, the given code returns a variable with missing values for the first cell of every permno. The following code can be used to avoid missing values.
 ```{r}
 # using this method to handle NA in the data. 
 ret_excess_lag <- crsp_monthly %>%
@@ -149,12 +135,7 @@ ret_excess_lag <- crsp_monthly %>%
   remove(ret_excess_lag)
 ```
 
-
-
-#### Report suitable summary statistics or visualizations that show if returns rt and rt−1 exhibit autocorrelation that is significantly different from zero. What do your results imply? Is there short-term momentum?
-
-
-
+**Report suitable summary statistics or visualizations that show if returns rt and rt−1 exhibit autocorrelation that is significantly different from zero. What do your results imply? Is there short-term momentum?**
 
 ```{r}
 crsp_monthly %>%
@@ -184,9 +165,9 @@ crsp_monthly %>%
 ```
 The PACF plot clearly shows that there is a significant relationship between $r_t$ and $r_{t-1}$. 
 
-## Task 3. 
+# 3. 
 
-#### Generate a new column mktcap_lag_12 which contains the firms’ market capitalization 12-month prior to the measurement date.
+# Generate a new column mktcap_lag_12 which contains the firms’ market capitalization 12-month prior to the measurement date.
 
 Lagging a variable can be a frustrating task, since the days of a month will differ. The below function will always return a date in the nth month after Date. This allows for 1) not exceeding the end of month and 2) handles NA's really well. 
 
@@ -205,20 +186,20 @@ mktcap_lag_12 <- crsp_monthly %>%
  remove(mktcap_lag_12)
 ```
 
-# Compute the momentum of stock i as the relative change in market capitalization, represented in percentage terms (1.00 is a 1% return) during the period covering months t−12 until t−1. Specifically, if $mc_{i,t}$ denotes the market capitalization of stock i in month t, compute momentum as  
 $$Mom_{i,t} = 100\frac{(mc_{i,t-1} −mc_{i,t-12})}{mc_{i,t-12}}$$
 ```{r}
+
+# Compute the momentum of stock i as the relative change in market capitalization, represented in percentage terms (1.00 is a 1% return) during the period covering months t−12 until t−1. Specifically, if $mc_{i,t}$ denotes the market capitalization of stock i in month t, compute momentum as  
+
 #Adding momentum column based on above formula in our dataset with lagged mktcap. 
 data_for_sorting <-  data_for_sorting %>%
   mutate(momentum =  100*(mktcap_lag-mktcap_lag_12)/mktcap_lag_12)
 ```
 
-#### Briefly discuss the difference between computing momentum as the relative change in prices or as the relative change in market capitalization.*
+**Briefly discuss the difference between computing momentum as the relative change in prices or as the relative change in market capitalization.**
 Since market cap is basically the stock price times volume, there is rarely a large distinction between the two. But the change in market cap will always reflect a change in the public value of a company whereas a change in stock price might be due to stock split or buybacks, which would have significant implications for the stock price but not the actual market capitalization (unless prices are given in adjusted form, e.g. as per yahoo! finance). 
 
-Create summary statistics for $Mom_{i,t}$  as follows: Each month, compute the mean, standard deviation,
-minimum, fifth percentile, 25th percentile, median, 75th percentile, 95th percentile, and maximum values
-of the cross-sectional distribution of $Mom_{i,t}$. 
+**Create summary statistics for $Mom_{i,t}$  as follows: Each month, compute the mean, standard deviation, minimum, fifth percentile, 25th percentile, median, 75th percentile, 95th percentile, and maximum values of the cross-sectional distribution of $Mom_{i,t}$.**
 
 ```{r}
 #Creating summary statistics for each month, i.e. 700+ rows of summary statistics
@@ -238,7 +219,7 @@ mom_stat = data_for_sorting %>%
 
 ```
 
-#### Then, report the time-series means for each cross-sectional value. What is the mean value of $Mom_{i,t}$ in the average month? What is the cross-sectional standard deviation? 
+**Then, report the time-series means for each cross-sectional value. What is the mean value of $Mom_{i,t}$ in the average month? What is the cross-sectional standard deviation? **
 
 ```{r}
 # Summarise the previously created montly summary statistics into one row by taking the mean in each column
@@ -247,7 +228,9 @@ mom_stat %>%
 
 remove(mom_stat)
 ```
-#### Does momentum exhibit a positive correlation with $log(mc_{i,t}$?*
+
+
+**Does momentum exhibit a positive correlation with $log(mc_{i,t}$?**
 
 ```{r}
 #Plotting correlation matrix for momentum and log_mktcap 
@@ -259,9 +242,9 @@ data_for_sorting %>%
 
 Yes, there is a positive correlation coefficient of 0.067 between the momentum value and log of market capitalization. 
 
-## Task 4. 
+# 4. 
 
-#### Next, examine the relation between momentum and future stock returns. For that purpose, perform univariate portfolio sorts in the following way: Compute monthly portfolio breakpoints. Each month, use $Mom_{i,t}$ as a sorting variable. The portfolio breakpoints are the deciles of $Mom_{i,t}$ calculated using all stocks i in the sample during month t.
+**Perform univariate portfolio sorts in the following way: Compute monthly portfolio breakpoints. Each month, use $Mom_{i,t}$ as a sorting variable. The portfolio breakpoints are the deciles of $Mom_{i,t}$ calculated using all stocks i in the sample during month t.**
 
 We need to create a function that is able to sort stocks into a number of portfolios. We use quantile() to compute breakpoints for n_portfolios. Then, we assign portfolios to stocks using the findInterval() function. The output of the following function is a new column that contains the number of the portfolio to which a stock belongs.
 
@@ -311,7 +294,7 @@ momentum_portfolios%>%
 ```
 This shows a snip of the new portfolios sorts that have been created. Portfolio 1 has the lowest momentum and 10 has the highest. 
 
-#### To help understand the characteristics of the stocks comprising each of the $Mom_{i,t}$ sorted portfolios, present the equal-weighted average values of $Mom_{i,t}$ and $mc_{i,t}$ for each of the 10 portfolios.
+**To help understand the characteristics of the stocks comprising each of the $Mom_{i,t}$ sorted portfolios, present the equal-weighted average values of $Mom_{i,t}$ and $mc_{i,t}$ for each of the 10 portfolios.**
 
 ```{r}
 momentum_portfolios %>% 
@@ -323,7 +306,7 @@ momentum_portfolios %>%
 ```
 This summary shows that the lowest portfolio sorts on momentum has the lowest market capitalization as well. Momentum is small for the largest companies. Momentum portfolios ranging from 6 to 8 has the highest market cap. The fact that the highest momentum companies are not the largest makes sense, since the largest companies might not be able to grow their business as much as smaller. 
 
-#### Compute value-weighted monthly excess returns for the decile portfolios. Report the average excess return, the CAPM alpha and the market beta for the 10 momentum sorted portfolios. 
+**Compute value-weighted monthly excess returns for the decile portfolios. Report the average excess return, the CAPM alpha and the market beta for the 10 momentum sorted portfolios.**
 
 ```{r}
 mom_portfolios_summary = momentum_portfolios %>%
@@ -374,7 +357,7 @@ remove(alpha_plot,beta_plot, mom_portfolios_summary)
 
 The plot indicates that the higher the momentum of a portfolio, the higher is the realized alpha.  Alpha becomes negative in the bottom four portfolio sorts. The beta of the momentum portfolio is highest in the lowest decile, which might come from the fact that this is also the portfolios with the lowest market capitalization. 
 
-# Finally, analyse the momentum strategy: a portfolio that goes long past winners (the highest decile) and short past losers (the lowest decile).
+**Finally, analyse the momentum strategy: a portfolio that goes long past winners (the highest decile) and short past losers (the lowest decile).**
 ```{r}
 strategy_portfolio_original = momentum_portfolios %>% 
   mutate(portfolio = as.numeric(portfolio)) %>%
@@ -397,16 +380,15 @@ strategy_portfolio_original %>%
 
 ```
 
-# What do you conclude about the performance of the momentum strategy? Is the strategy market neutral (i.e., does it exhibit a market beta which is zero)? Does the strategy deliver abnormal excess returns (i.e., a positive alpha)?
+**What do you conclude about the performance of the momentum strategy? Is the strategy market neutral (i.e., does it exhibit a market beta which is zero)? Does the strategy deliver abnormal excess returns (i.e., a positive alpha)?**
 
 The test statistics shows that is it possible to generate 0.1% alpha by having a short position in the lowest decile momentum stocks and a long position in highest decile momentum stocks. The alpha can be implied by the graph above, which shows that alpha is highest within the highest momentum stocks. 
 The strategy is not market neutral as the beta is -0.45.  
 
-## Task 5. 
+# 5. 
 
-#### One of the main conclusions in the momentum literature is that the timing of the measurement of momentum plays a substantial role in the nature of the relation between momentum and future stock returns. To assess this in more detail and to examine whether momentum has the ability to predict returns further in the future than the next month, repeat the univariate portfolio sorts but this time using the k-month-ahead excess return as the outcome variable for values of k ∈{1, 3, 6, 12}.
+**Repeat the univariate portfolio sorts but this time using the k-month-ahead excess return as the outcome variable for values of k ∈{1, 3, 6, 12}. For which time-horizon does the momentum deliver the highest risk-adjusted performance?**
 
-#### For which time-horizon does the momentum deliver the highest risk-adjusted performance?
 The momentum strategy delivers the highest risk-adjusted excess return with a 1-month ahead horizon. The 0-month ahead is included as a verification of the method, as this is the same number as earlier reported. 
 
 ```{r}
@@ -463,14 +445,13 @@ data %>% pander::pander()
 remove(k,i,estimate,data, lag_excess_ret, assign_portfolio, portfolio, strategy_portfolio)
 ```
 
- 
+# 6.
 
-### 6. Most academic studies ignore real world costs and other forms of slippage when examining factors, which is likely a larger issue for momentum due to its higher turnover. The concern is that momentum is so costly to trade that its return premium is diminished in the real world. 
+**Based on your findings in 1. and 3., briefly explain why you think a momentum strategy could be costlier to trade than, say, a strategy based on size sorts.**
 
-# First, based on your findings in 1. and 3., briefly explain why you think a momentum strategy could be costlier to trade than, say, a strategy based on size sorts.
 When a given portfolio selection is based on i.e., past year market cap momentum, then the composition of the portfolio would change frequently as this is based purely on the performance of the stock value. Basically, since the analysis is made purely on activity from the past 12 months the momentum-portfolio composition will change often, since the market value of public companies tend to change frequently. Compared to a beta selection strategy where the analysis is made from i.e., 20 or 30 year historic stock price data, then the estimate would change much less frequently. This dramatically increases the need for trading activity and thus transaction costs of the momentum strategy. For the momentum strategy to be efficient, there will have to be frequent turnover, otherwise the strategy might not be able to catch it if a stock loses momentum after it's traded.  
 
-# Then, propose an alternative strategy that may be able to effectively capture the momentum premium but which at the same time delivers lower trading costs. Describe the strategy and implement it within the CRSP sample. 
+**Propose an alternative strategy that may be able to effectively capture the momentum premium but which at the same time delivers lower trading costs. Describe the strategy and implement it within the CRSP sample.**
 
 A portfolio that would capture a momentum effect but at the same time deliver lower trading costs, compared to the portfolio in 4, can be a portfolio with a strict no-short selling condition. Instead of buying the upper 10th quantile of momentum and selling the 1st quantile, we strictly go long in the upper 10th quantile. The idea is that this will result in a lower turnover, as assets enter and exit the portfolio less frequently. 
 
@@ -528,8 +509,8 @@ remove()
 
 ```
 
-#Report the resulting Sharpe-ratio and average turnover and compare to the baseline momentum strategy from exercise 4.
-Her skal værdierne stå når vi er klar:
+**Report the resulting Sharpe-ratio and average turnover and compare to the baseline momentum strategy from exercise 4.**
+
 ```{r, message=FALSE}
 
 #Finding sharpe ratio of the baseline portfolio
