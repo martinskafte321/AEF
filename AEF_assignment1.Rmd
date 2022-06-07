@@ -146,7 +146,7 @@ return_plot <- returns %>%
   labs(
     x = "Date", 
     y = "Average excess return",
-    title = "Average excess return"
+    title = "A. Average excess return"
   )
 
 abs_return_plot <- returns %>%
@@ -155,24 +155,25 @@ abs_return_plot <- returns %>%
   labs(
     x = "Date", 
     y = "Average absolute excess return",
-    title = "Average absolute excess return"
+    title = "C. Average absolute excess return"
   )
 
 acf_return <- returns %>%
   select(ret_excess) %>% 
-  forecast::ggAcf() + labs(title = "ACF of excess returns")
+  forecast::ggAcf() + labs(title = "B. ACF of excess returns")
 
 acf_abs_return <- returns %>%
   transmute(ret_excess = abs(ret_excess)) %>%
   select(ret_excess) %>% 
-  forecast::ggAcf() + labs(title = "ACF of absolute excess returns")
+  forecast::ggAcf() + labs(title = "D. ACF of absolute excess returns")
 
 ggarrange(return_plot, acf_return, abs_return_plot, acf_abs_return, ncol = 2, nrow = 2)
 
 ```
-As the mean of returns is non-constant, it does not fluctuate around a constant value, returns suffer from autocorrelation. Furthermore, there is a negative correlation between $r_t$ and $r_{t-1}$. The PACF plot clearly shows that there is a significant relationship between $r_t$ and $r_{t-1}$. 
+The figure above shows that there is no immediate autocorrelation between $r_t$ and $r_{t-1}$ in the regular return series (plot A and B). There seems to be more or less random fluctuations in the series and the ACF plot indicates no significant autocorrelation in the first lag. With that said, when utilizing the absolute returns it's clear that there are more obvious signs of volatility clustering in plot C, which is an indication that high volatility is followed by high volatility. Furthermore, the ACF plot shows that there is significant correlation up until and around 10-15 lags (months). These plots have been created by grouping on the 'month' variable and calculating a weighted mean by market capitalization, to get a presentable presentation of the return data. This aggregation means that we might loose some predictability power in the single stock, but will get a nice total overview of the return series. \\
 
-We make sure to investigate autocorrelation in excess returns by looking at time-series of specific firms, and not the averages from CRSP. 
+Moreover, to provide a more concrete answer to the question, we'll estimate AR(1) models for a random sample of 10\% of the dataset and test the significance of the coefficients. One needs to collect a random sample of 'permno' identifiers (that is 2.489 firms) and filter these specific firms from the data, then create the regression and collect the coefficient while only filtering for significant p-values. This leaves us with 277 firms, where there is a significant relationship between $r_t$ and $r_{t-1}$, which means that 11.1\% are significant. 
+
 
 ```{r}
 # Filter the data to only get a random subset of 10% of the whole CRSP dataset:
