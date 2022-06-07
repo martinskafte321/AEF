@@ -492,7 +492,7 @@ data %>% kbl(caption = "Porfolio performace with different time-horizons", digit
   kable_classic(full_width = T, html_font = "Cambria")
 
 
-remove(k,i,estimate,data, lag_excess_ret, assign_portfolio, portfolio, strategy_portfolio)
+remove(k,i,estimate,data, lag_excess_ret, assign_portfolio, portfolio)
 ```
 
 # 6.
@@ -553,7 +553,8 @@ trades_momentum_new = momentum_new %>%
 table = matrix(c(trades_momentum_original,trades_momentum_new), ncol=1)
 rownames(table) <- c('momentum_original','momentum_new')
 colnames(table) <- c('Total trades')
-table %>% pander::pander()
+table %>% kbl(caption = "Total number of trades", digits = 3) %>% 
+  kable_classic(full_width = T, html_font = "Cambria")
 
 remove()
 
@@ -584,7 +585,8 @@ sharpe_new = momentum_new %>%
 table = matrix(c(sharpe_old,sharpe_new), ncol=1)
 rownames(table) <- c('Original portfolio','No short-portfolio')
 colnames(table) <- c('Sharpe Ratio')
-table %>% pander::pander()
+table %>% kbl(caption = "Sharpe ratio of portfolios", digits = 2) %>% 
+  kable_classic(full_width = F, html_font = "Cambria")
 
 ```
 
