@@ -15,6 +15,7 @@ knitr::opts_chunk$set(echo = FALSE)
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 # Loading required packages:
 library(RSQLite)
+library(forecast)
 library(tidyverse)
 library(tidymodels) 
 library(furrr) 
@@ -81,7 +82,7 @@ The variable 'mktcap' is defined as the market capitalization, which refers to t
 
 ```{r}
 
-summaryret <- crsp_monthly %>%
+ret <- crsp_monthly %>%
   group_by(month) %>%
   summarise(across(ret_excess,
                   list(Mean = mean, SD = sd, Min = min,
@@ -93,7 +94,7 @@ summaryret <- crsp_monthly %>%
 
 
 #Summary statistics for mktcap
-summarymkt <- crsp_monthly %>%
+mkt <- crsp_monthly %>%
   group_by(month) %>%
   summarise(across(mktcap,
                   list(Mean = mean, SD = sd, Min = min,
@@ -104,8 +105,10 @@ summarymkt <- crsp_monthly %>%
   summarise(across(-month, mean)) %>% add_column('Variable' = "mktcap")
 
 #Combine statistics into one table
-rbind(summaryret, summarymkt) %>% relocate(Variable) %>% kbl(caption = "Summary statistics for monthly excess returns (%) and market capitalization (Million USD)",digits = 3) %>%
+rbind(ret, mkt) %>% relocate(Variable) %>% kbl(caption = "Summary statistics for monthly excess returns (%) and market capitalization (Million USD)",digits = 3) %>%
   kable_classic(full_width = F, html_font = "Cambria")
+
+remove(ret,mkt)
 ```
 Summary statistics for monthly excess returns and market capitalization shows that the mean excess return per month is 0.8%, although the median excess return is -0.2%. Returns ranges from -69% to +268%. Market capitalization ranges from \$710 thousand to \$242 billion. An important distinction between the variables is that ret_excess is in relative numbers while mktcap is absolute, since the return is a relative change and market cap is a true number. 
 
@@ -130,28 +133,42 @@ ret_excess_lag <- crsp_monthly %>%
 
 ```{r}
 
-# Plotting excess returns, to investigate potential autocorrelation. 
-crsp_monthly %>%
-  group_by(permno) %>%
-  ggplot(aes(x = month, y = ret_excess_lag)) +
-  geom_line() +
+# Calculate return data as weigthed market cap:
+returns <- crsp_monthly %>%
+  group_by(month) %>%
+  summarise(ret_excess = weighted.mean(ret_excess, mktcap_lag))
+
+
+# Plotting excess returns, to investigate potential autocorrelation:
+return_plot <- returns %>%
+  ggplot(aes(x = month, y = ret_excess)) + 
+  geom_bar(stat="identity", position="dodge") +
   labs(
-    x = NULL, 
-    y = NULL,
-    title = "ret_excess_lag",
-    subtitle = "Excess returns over time"
+    x = "Date", 
+    y = "Average excess return",
+    title = "Average excess return"
   )
 
-crsp_monthly %>%
-  mutate(ret_lag = lag(ret)) %>%
-  drop_na() %>%
-  select(ret,ret_lag) %>%
-  cor() %>% pander::pander()
+abs_return_plot <- returns %>%
+  ggplot(aes(x = month, y = abs(ret_excess))) + 
+  geom_bar(stat="identity", position="dodge") +
+  labs(
+    x = "Date", 
+    y = "Average absolute excess return",
+    title = "Average absolute excess return"
+  )
 
-crsp_monthly %>%
-  drop_na() %>%
-  select(ret_excess_lag) %>%
-  pacf()
+acf_return <- returns %>%
+  select(ret_excess) %>% 
+  forecast::ggAcf() + labs(title = "ACF of excess returns")
+
+acf_abs_return <- returns %>%
+  transmute(ret_excess = abs(ret_excess)) %>%
+  select(ret_excess) %>% 
+  forecast::ggAcf() + labs(title = "ACF of absolute excess returns")
+
+ggarrange(return_plot, acf_return, abs_return_plot, acf_abs_return, ncol = 2, nrow = 2)
+
 ```
 As the mean of returns is non-constant, it does not fluctuate around a constant value, returns suffer from autocorrelation. Furthermore, there is a negative correlation between $r_t$ and $r_{t-1}$. The PACF plot clearly shows that there is a significant relationship between $r_t$ and $r_{t-1}$. 
 
