@@ -554,7 +554,7 @@ table = matrix(c(trades_momentum_original,trades_momentum_new), ncol=1)
 rownames(table) <- c('momentum_original','momentum_new')
 colnames(table) <- c('Total trades')
 table %>% kbl(caption = "Total number of trades", digits = 3) %>% 
-  kable_classic(full_width = T, html_font = "Cambria")
+  kable_classic(full_width = F, html_font = "Cambria")
 
 remove()
 
