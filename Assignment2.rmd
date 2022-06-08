@@ -1,0 +1,555 @@
+---
+title: "Assignment 2"
+author: "Martin, Oliver and Fred"
+date: "4/6/2022"
+output:
+  html_document: default
+  pdf_document: default
+  
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+```{r, message=FALSE}
+library(RSQLite)
+library(tidyverse)
+library(tidymodels) 
+library(furrr) 
+library(glmnet)
+library(broom)
+library(timetk)
+library(scales)
+library(lubridate)
+library(scales)
+library(frenchdata)
+library(caret)
+library(ggplot2)
+library(ggpubr)
+library(kableExtra)
+library(mltools)
+library(data.table)
+library(vtable)
+library(keras)
+```
+
+# 1
+```{r}
+#tidy_finance_ML <- dbConnect(SQLite(), "/Users/fredlundahl/Desktop/AEF/data/tidy_finance_ML.sqlite", extended_types = TRUE)
+
+#tidy_finance_ML <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance_ML.sqlite", extended_types = TRUE)
+
+# Connecting to SQLite, reading in stock_charachteristics_monthly.
+tidy_finance_ML <- dbConnect(SQLite(), "data/tidy_finance_ML.sqlite", extended_types = TRUE)
+
+  # selecting 5 characteristics and 4 macro variables
+characteristics <- tbl(tidy_finance_ML, "stock_characteristics_monthly") %>%
+  select(month, permno, sic2, ret_excess, mktcap_lag, characteristic_beta, characteristic_turn, characteristic_mom1m, characteristic_mom12m, characteristic_mom36m, macro_dp, macro_ep, macro_bm, macro_ntis) %>%
+  collect() %>%
+  mutate(month = as.Date(as.POSIXct.Date(month)))
+
+
+# Connection to new database to get mkt_excess       
+ tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
+                           extended_types = TRUE)
+
+# tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
+                       #    extended_types = TRUE)
+#Reading in factors_ff_monthly dataset
+factors_ff_monthly <- tbl(tidy_finance, "factors_ff_monthly") %>%
+  select(month,mkt_excess) %>%
+  collect() %>%
+  mutate(month = as.Date(as.POSIXct.Date(month)))
+
+dbDisconnect(tidy_finance_ML,tidy_finance)
+remove(tidy_finance_ML,tidy_finance)
+```
+
+We have chosen to work with five firm characteristics (beta, turn, mom1m, mom12m and mom36m) and four macro indicators (dp, ep, bm and ntis). Beta is the market beta, which indicates the movement of the individual stock relative to the market. Turn is the turnover of a stock and is a measure of liquidity. Mom1m is the one month momentum, which is included to capture short-term reversal. Mom12m (12 month momentum) is brought as the general momentum measure and mom36m as a long-term reversal indicator. 
+
+Bringing three momentum variables into the model might be a stretch, but these are shown (from variable importance in Gu, Kelly and Xiu (2019)) to be quite significant predictors in asset pricing.  
+
+```{r}
+# Removing all observations prior to January 1st, 2005 by filtering out earlier dates. 
+data <- characteristics %>%
+  filter(month >= "2005-01-01") %>%
+  drop_na()
+
+remove(characteristics)
+```
+
+```{r}
+
+# Overview of included variables.
+data %>%
+  select(-month, -sic2, -permno, -mktcap_lag) %>%
+  sumtable(
+    summ = c('mean(x)','sd(x)','min(x)','pctile(x)[25]','pctile(x)[75]','max(x)'),
+    summ.names = c('Mean','Sd.','Min','Pctl. 25','Pctl. 75','Max'),
+     labels = c('Return excess','Market beta',
+                       'Turnover','Momentum (1)','Momentum (12)','Momentum (36)', 'Dividend-Price','Earnings-price','Book-Market', 'Net Eqiuty Expansion'),
+    digits = 2,
+    out = "return") %>%
+  kbl(caption = "Summary table of variables") %>%
+  kable_classic(full_width = F, html_font = "Cambria") %>%
+  footnote(general = "We note the oddly similar maximum values for beta, turnover and the three momentum variables. We have checked that this is in fact not an error by us.",
+           footnote_as_chunk = T)
+```
+
+
+Bm is the book-to-market ratio, which measures the total book value (that is, company value from earnings statement) relative to the market value (on the stock market), ntis is the Net Equity Expansion, which measures the ratio of 12-month moving sums of net issues on the NYSE divided by the total end-of-year market cap of NYSE stocks. EP is the earnings-to-price ratio, which is the difference between the log of earnings and the log of prices. DP is the Dividend-Price ration, which is the difference between log of dividends and log of prices. 
+
+
+```{r} 
+# Statistics of firms and industries.
+barplot = data %>% 
+  select(permno, sic2) %>%
+  distinct() %>%
+  group_by(sic2) %>%
+  summarise(permno_n = n()) %>%
+  filter(permno_n >= 50) %>%
+  mutate(sic2 = factor(sic2)) %>%
+  ggplot(aes(
+  x = sic2, y = permno_n),
+  level = sic2) +
+  geom_bar(stat="identity", width=.5, fill="tomato3") +
+  labs(x="Industry class",
+         y="Number of firms",
+       caption = "Only includes industries with +50 companies, as below values are less relevant")
+  
+```
+
+```{r,echo=FALSE, fig.align = 'center'}
+# Illustrations of macroeconomic predictors
+plot_ntis_bm = data %>% 
+  select(month, macro_ntis, macro_bm) %>%
+  rename('Book-to-Market' = macro_bm,'Net Eqiuty Expansion' = macro_ntis) %>%
+  melt(id='month') %>%
+  ggplot(aes(x=month,y=value,colour=variable, group=variable)) + 
+  scale_color_manual(values = c("#CC79A7", "#009E73")) +
+  geom_line() +
+  labs(
+    x = "Date",
+    y = "Indicator value")  +
+  theme(legend.position="top",
+        legend.title = element_blank())
+  
+  plot_ep_dp = data %>% 
+  select(month,macro_ep, macro_dp) %>%
+    rename('Earnings-Price' = macro_ep,'Dividend-Price' = macro_dp) %>%
+  melt(id='month') %>%
+  ggplot(aes(x=month,y=value,colour=variable, group=variable)) + 
+  scale_color_manual(values = c("#E69F00", "#293352")) +
+  geom_line() +
+  labs(
+    x = "Date",
+    y = "Indicator value")  +
+  theme(legend.position="top",
+        legend.title = element_blank())
+  
+  
+# We can arrange the two plots to show them together in one graph. 
+figure = ggarrange(plot_ntis_bm, plot_ep_dp, ncol = 2) %>%
+  annotate_figure(top = text_grob("Time series of macro-indicators"))
+
+
+ggarrange(barplot,   # First row with bar plot
+          figure,    # Second row with box and line plots
+          nrow = 2
+          ) %>%
+  annotate_figure(top = text_grob("Number of firms per industry"))
+
+
+
+#remove(plot_ntis_bm,plot_ep_dp)
+```
+
+We create a recipe from tidymodels to perform two further cleaning steps: 1) to locate all interacting terms between the macro indicators and company characteristics, and 2) to modify the industry specific value into a dummy variable, since this format is more friendly to machine learning. 
+
+```{r}
+# We need sic2 to be a factor and not just a categorical variable, since this allow us to interpret the levels (values) as 0's and 1's. 
+data = data %>%
+  mutate(sic2 = as.factor(sic2))
+
+# Splitting, 20% of data for testing
+split <- initial_time_split(
+  data, prop = 4 / 5 
+)
+
+# Split the training set further into a training set, and a validation set.
+newsplit <- initial_time_split(
+  training(split), prop = 3 / 5, 
+)
+
+
+# The one-hot function takes the data from our dataset (sic2) and transforms the categorical variable into 70 columns of ones or zeros depending on the actual value of the industry indicator. 
+
+recipe = recipe(ret_excess ~  ., data = training(newsplit)) %>% # True training data to estimate a model
+  step_normalize(c(contains("characteristic"),contains("macro"))) %>%
+  step_center(ret_excess, skip = TRUE) %>%
+  step_interact(terms = ~ contains("characteristic"):contains("macro")) %>%
+  step_mutate(one_hot(as.data.table(sic2))) %>%
+  step_rm(month, mktcap_lag, sic2, permno)
+  
+  
+```
+
+After specifying the recipe-steps that should transform the data into something more machine learning-friendly, we can estimate a model. 
+
+# 2 
+As described in the paper, one limitation to the modelling approach relies on the fact that the function for the conditional expected return $g^*(·)$ does not depend on neither i nor t. This implies that the function retains the same form over time and it relies on the entire panel of stocks. While this brings stability to the model, it comes with the cost that the ability to estimate risk premiums for individual stocks is significantly reduced. Furthermore, the function depends on the vector of predictors, z, only through $z_{i,t}$. This implies that the prediction uses information strictly from the i'th stock at time t. Thus, historical observation are not accounted for. \
+
+As for the estimation approaches, there are limitations associated with all of those employed by the authors. Firstly, a limitation to the penalized regression stems from the fact that shrinkage and variable selection is forcing coefficients on most regressors close or exactly to zero when managing high dimensionality which can produce suboptimal forecasts in cases where predictors are have high correlations. On page 2235, an example is provided: "A simple example (...) is a case in which all of the predictors are equal to the forecast target plus an iid noise term. In this situation, choosing a subset of predictors via lasso penalty is inferior to taking a simple average of the predictors and using this as the sole predictor in a univariate regression".Secondly, when using a random forest model for estimation, one pro of the framework is that it makes the model very flexible. As summarized by the authors on pages 2240-2241: "Advantages (...) are that it is invariant to monotonic transformations of predictors, that it naturally accommodates categorical and numerical data in the same model, that it can approximate potentially severe nonlinearities, and that a tree of depth L can capture (L−1)-way interactions". However, this also implies the limitation that tree models usually suffers from overfitting, which requires thorough regularization of the model. As for the neural network, the complexity of the models makes them suffer from being non-transparent, non-interpretable and highly parameterized, which makes them difficult to use. Furthermore, the structure of neural networks makes cross-validation a difficult task during model selection process, which in this case leads the authors to fix a selection of network architectures ex ante for estimation, i.e., they take a guess. \
+
+As described in the paper, the model deviates from standard asset pricing approaches because the function for $g^*(·)$ maintains the same form over time and across stocks instead of reestimating a cross-sectional model in each period or for each stock independently. Therefore, two alternative modelling approaches could be ones that would do just that. A) in each period, we reestimate $g^*(·)$ as a cross-sectional model and B) we estimate $g^*(·)$ as a time-series model for each stock individually. \
+
+A third alternative is to utilize simple variations of OLS-regressions. Making use of the APT, one could map the linear factor model for excess returns using betas for various factors that affect or are believed to affect returns. This would be done with an OLS-regression. The benefit of the OLS-regression compared to ML-approaches is that OLS would produce an unbiased estimator of excess returns, while ML-models produce an estimate that is, to some extent, biased. Z in the APT-model would be all included predictors of excess returns, the regressors. The functional form of the APT would be linear.
+
+# 3
+The objective function is to minimize the root mean squared prediction error (RMSE) of the ML-model. That is, to estimate a model that predicts excess returns as well as possible. The hyperparameter tuning process involves a step-wise process, where the engine tries out several different combinations of the parameters. For a Elastic Net model, this would indicate different values of penalties and alpha (the mixture between Ridge and Lasso). The hyperparameters are thus tuned so that MPSE is minimized. \
+
+When the goal of a specific model is prediction, then the means to get there is to minimize i.e., RMSE (to get the best average prediction), whereas if the goal is to uncover the most consistent model, you would want to use all of your data to get the best fit. Thus to minimize RMSE you need both training and testing data to verify that your model actually works when encountered with new data - otherwise the RMSE would take off in reality. \
+
+Selecting hyperparameters from a validation dataset can be problematic for a number of reasons. The validation dataset can be too small - and if this is the case, then a worry is that it might consist of data that poorly reflects other data if some specific events are dominating the validation set. The validation dataset might require you to shrink your training set, which will lessen the estimation possibilities. \
+
+As we have already split the dataset into a training (80$\%$) and a test set (20$\%$), we will now further split the training set into a training and validation set. The new training set will thus include 53$\%$ of the original data and the validation set will include 27$\%$. The reasononing behind the additional split of the training set is that we want a reliable model. If the split is not performed, then the results will be biased and we might end up with a false impression of the model accuracy. The training set will be fed in the learning phase to obtain patterns in the data. The validation set is used to validate the model performance during the training phase and provides information helpful in tuning the models hyperparameters. The test set is totally seperated from the training phase and will only be used to test the model after completing training to provide an unbiased performance metric. 
+
+
+# 4
+We start by specifying the models for which we plan to test. This includes an Elastic Net (EN) model for which we tune the penalty term and mixture (between Ridge and Lasso estimation), and a Neural Network (NN), where we tune the number of epochs. Due to constraints on computing power, we have chosen not to tune any more hyperparameters on the NN, since this simple tuning procedure lasted +8 hours. 
+
+In an elastic net, we specify a model where we, through tuning of hyperparameters, take decisions on the mixture between Lasso and Ridge regression. In Lasso regression, coefficients on a subset of covariates are set to zero which means that Lasso can be thought of as a variable selection method. We do not want to include all variables with possible explanatory power in the model, only variables that have a large enough effect. The Ridge draws all coefficient estimates closer to zero and can therefore be seen as penalization on regressor variance. An elastic net is a combination of these models.\
+
+Neural networks takes information from an input layer, through one or multiple hidden layers, to an output layer. The output layer predicts future data. In a neural network, weights are assigned to variables to determine the importance of variables in terms of output. If an output exceeds a certain threshold, it activates a node that passes data through to a next layer in the network. In a neural network, hyperparamaters that are to be tuned are the number of trees and layers, the complexity of the network. The network aims to understand patterns in the data and enables predictive modelling of future data.\
+
+Next, we set up a cross validation technique - in our case the K-fold cross-validation. The idea behind the technique consists of evaluating performance of 10 different subsets of the training data and calculating average prediction error. We split the training data into three years of data and asses this on two years. This is a general step that we will utilize for both models. 
+
+```{r}
+# K fold cross validation for both models. 
+data_folds <- time_series_cv(
+  data        = training(newsplit),
+  date_var    = month,
+  initial     = "3 years",# changes these when adding all the data
+  assess      = "2 years", # changes these when adding all the data
+  cumulative  = FALSE,
+  slice_limit = 10
+)
+```
+
+```{r}
+# We tune both models before moving on with the estimation.
+set.seed(9844)
+
+### Elastic Net
+
+# Tuning an Elastic Net model through "glmnet"
+lm_model <- linear_reg(
+  penalty = tune(),
+  mixture = tune()
+) %>% 
+  set_engine("glmnet")
+
+# Combining model and recipe into a workflow
+lm_fit <- workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(lm_model)
+
+
+### Neural Network
+
+# Specifying a model (only partly tuning, due to computation time)
+nnet_model <- mlp(
+  epochs = tune(),
+  hidden_units = 15
+  ) %>%
+  set_mode("regression") %>%
+  set_engine("keras", verbose = 0)
+
+# Combining model and recipe into a workflow
+nn_fit <- workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(nnet_model)
+```
+
+The next step is to create the models. For the EN-model this includes to use cross-validation as a re-sampling technique, and a grid of 30 possible hyperparameters to tune - 10 different penalty options and three $\alpha$ mixtures. The NN is only tuned with 2 combinations of epochs, namely 10 and 1000 (we would have included more hyperparametres if computation power allowed it).
+
+```{r}
+set.seed(8745)
+
+# Elastic Net
+# Combining model and recipe into workflow, fitting the model on the training dataset.
+en_tune <- lm_fit %>%
+  tune_grid(
+    resample = data_folds,
+    grid = grid_regular(penalty(), mixture(), levels = c(10, 3)),
+    metric = "rmse"
+  )
+
+# Creating final workflow where the best parameters are added.
+fit_lm_model <- lm_fit %>%
+  finalize_workflow(parameters = en_tune %>% select_best(metric = 'rmse')) %>%
+  # Fitting the model on the training data.
+  fit(data = training(newsplit))
+```
+
+```{r, eval=FALSE}
+# Neural Network
+lm_tune <- nn_fit %>% # We mistakenly name the neural net = lm_tune, even though this is the name we use for the linear regression
+  tune_grid(
+    resample = data_folds,
+    grid = grid_regular(epochs(), levels = 2),   # Tuning
+    metric = "rmse"
+  )
+
+# Final workflow with best hyperparameters
+fit_nn_model <- nn_fit %>%
+  finalize_workflow(parameters = lm_tune %>% select_best(metric = 'rmse')) %>%
+  # Fitting the model on the training data.
+  fit(data = training(newsplit))
+```
+
+```{r fig.align = 'center', fig.width=8, fig.height=4}
+# Illustrations of effects of different hyperparameters on predictive performance. 
+
+autoplot(en_tune, metric = "rmse") +
+  labs(y = "Root mean-squared prediction error",
+       title = "RMSE for excess returns",
+       subtitle = "Lasso (1.0), Ridge (0.0), and Elastic Net (0.5) with different levels of regularization.")
+
+# autoplot(lm_tune) +
+#  labs(y = "Root mean-squared prediction error",
+#       title = "RMSE for excess returns",
+#       subtitle = "Lasso (1.0), Ridge (0.0), and Elastic Net (0.5) with different levels of regularization.")
+```
+
+
+```{r, eval = FALSE}
+# We want to make clear, that due to the extensive tuning time of the nn model, we have added an option, where we have pre-loaded the tuning results into a csv-file, which can be displayed, if you as a user do not have time to wait out the tuning process. 
+
+# 4.2 Use this fitted model to generate return predictions in the validation test set and evaluate the mean squared prediction error
+
+# Gathering all the predicted values from the validation and observed prices in *pred_collected* in order to calculate root mean squared error for each of the models.
+pred_collected_validation <- tibble(
+  actual = testing(newsplit) %>% pull(ret_excess),
+  elnet = fit_lm_model %>% predict(new_data = testing(newsplit)) %>% pull(.pred),
+  nn = fit_nn_model %>% predict(new_data = testing(newsplit)) %>% pull(.pred)) %>% 
+    pivot_longer(cols = -actual, 
+               names_to = 'model',
+               values_to = 'prediction')
+
+ write.csv(pred_collected_validation, 'pred_collected_validation.csv', row.names = FALSE)
+```
+After tuning the Elastic Net and Neural Network, we can extract the best performing hyperparameter combinations from the data tested on the validation set. The two best performing models are very close when comparing the rmse of the validation sample. The NN has a rmse of 0.1615, while the EN model has a loss of 0.1658. 
+
+```{r, eval = FALSE}
+# Option 1), if you have run the tuning process of both models yourself. 
+pred_collected_validation %>%
+  group_by(model) %>% 
+  yardstick::rmse(truth = actual, estimate = prediction) %>% 
+  select(model, .estimate) %>%  rename('rmse' = '.estimate') %>%
+  arrange(rmse) %>% 
+  kbl(caption = "Validation set prediction error") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+
+```{r}
+ # Option 2) If you haven't run the tuning option and will suffice with the pre-loaded csv file with predictions on the validation set. 
+
+read.csv('pred_collected_validation.csv') %>%
+  group_by(model) %>% 
+  yardstick::rmse(truth = actual, estimate = prediction) %>% 
+  select(model, .estimate) %>%  rename('rmse' = '.estimate') %>%
+  arrange(rmse)  %>% 
+  kbl(caption = "Validation set prediction error") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+From the graph, it becomes visible that the model performing best in terms of minimizing RMSE is, for the Elastic Net, a model that take 0 of Lasso, meaning a Ridge regression, and a penalization term of 0.077.
+Also, Lasso and Elastic Net models with high penalization terms perform well. A Lasso regression performs the best but Elastic Net and Ridge falls just slightly behind. \
+
+For the Neural Network model, we receive the lowest RMSE through models with 10 epochs (training cycles through the dataset). The simpler NN is by far more precise than the complex one with 1000 epochs.  More precisely, the hyperparameters chosen for the models are a Ridge regression with penalization of 0.77, and a Neural Network with 10 epochs and 15 hidden units.\
+
+Having fitted the model we are now able to use it for making predictions. We gather all predictions as a vector and all actual observations as well for comparison. 
+
+
+
+
+ 
+```{r, eval = FALSE}
+# We want to make clear, that due to the extensive tuning time of the nn model, we have added an option, where we have pre-loaded the tuning results into a csv-file, which can be displayed, if you as a user do not have time to wait out the tuning process. All we have done is saving our results into a csv, which we can visualize to show our results. If you do run the code, then all you need to do is run line 351, then you will get your own results shown.  
+
+# The CSV is attached to the assignment. 
+nn_specs <- lm_tune %>%
+  show_best(metric = "rmse",n=10) %>%
+    select(-.metric,-n, -.estimator, 'rmse' = mean, 'model' = .config) %>% relocate(model) %>%
+  add_column('hidden units' = 15, .before = 'rmse') %>%
+  add_column('engine' = 'keras', .before = 'epochs') %>%
+  add_column('top' = 1:2, .before = 'model')
+
+# write.csv(nn_specs, 'nn_specs.csv', row.names = FALSE)
+ 
+```
+
+```{r, eval = FALSE}
+# Option 1) if you do not use the csv
+
+nn_specs %>%
+  kbl(caption = "Top 2 hyperparameter combinations for Neural Network") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+```
+
+```{r}
+# Option 2) if you do not use the csv:
+read.csv('nn_specs.csv') %>%
+  kbl(caption = "Top 10 hyperparameter combinations for the Elastic Net") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+
+en_tune %>%
+  show_best(metric = "rmse",n=10) %>%
+  select(-.metric,-n, -.estimator, 'rmse' = mean, 'model' = .config) %>% relocate(model) %>%
+  add_column('engine' = 'glmnet', .before = 'penalty') %>%
+  add_column('top' = 1:10, .before = 'model') %>%
+  kbl(caption = "Top 10 hyperparameter combinations for Elastic Net model") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+
+```
+
+The complexity of a model and it's hyperparameters is best illustrated as an issue of the bias-variance trade-off, which is the relation between model complexity and flexibility. A highly complex model might have a low bias, since it's well specified, but will encounter a high variance, since the model is too complex to understand patterns in unknown data - thus it is overfitted. On the other hand a model that's too general might not capture the underlying structure in the data, which we state as being underfitted. These models will usually have a high bias and a low variance, since the model wouldn't know how to read patterns in the data, thus the predictions will be less varying. 
+
+In the case of this analysis it can be a bit difficult to discuss the complexity relationship, since the models themselves are not very complex. Usually, the neural net would be the most complex model, but in this case we only have two combinations of the model, which consists of 'epochs' of 10 and 1000. Nevertheless, it's still clear to see that the more simple model
+is the best performing with a rmse of 0.24 against 1.24 for the model with 1000 epochs. Sadly, it wasn't possible to test more models due to constraints on computing power. In the case of the Elastic Net we have more options to interpret. The best performing model is basically a Ridge-regression, since $\alpha = 0$. However, it's a bit difficult to interpret which of Lasso and Ridge is definitively performing best, since the next best model is a Lasso-regession, and on the top five-list there are three $50\%$ mixture models. Moreover, the rmse of the different models are very close to each other. Furthermore, an interpretation of the regularization values (penalties) making the top 10 list is a bit cumbersome, since there's no clear pattern. The top three consists of high (1.0, low (0.005) and -low-medium (0.07) level penalty levels. However, there seems to be a bit of overweight of low penalty values. A fairly loose conclusion is that the neural net performs best with low complexity (low amount of epochs), and the elastic net performs best with a low penalty rate and a mixture of 0 (being a Ridge-model). 
+
+The rmse of both models are lower in the validation set, which is an indication of two well specified models. Furthermore, the validation set is randomly picked throughout the time series, why the lower rmse has nothing to do with certain time periods being easier to predict. 
+
+
+# 5
+We start out by taking the out-of-sample ("testing(split)") stock return prediction for our tuned elastic net and neural network models. For the convenience of the reader, we store our results in a csv-file that the reader may refer to when going through our interpretation.  
+```{r, eval = FALSE}
+# First, calculate out-of-sample predictions for both models:
+
+# Option 1) If you do not use the CSV
+pred_collected_testing <- tibble(
+  actual = testing(split) %>% select(month,permno,ret_excess, mktcap_lag),
+  elnet = fit_lm_model %>% predict(new_data = testing(split)) %>% pull(.pred),
+  nn = fit_nn_model %>% predict(new_data = testing(split)) %>% pull(.pred)) %>% 
+  pivot_longer(cols = -actual, 
+               names_to = 'model',
+               values_to = 'prediction') %>%
+  unnest(actual)
+
+# Again, we write a csv-file, since this allows the user to point to this, to get the actual predictions that we made, when running the models. 
+
+   write.csv(pred_collected_testing, "pred_collected_testing.csv", row.names = FALSE)
+```
+
+```{r}
+# Option 1) If you do use the CSV
+pred_collected_testing_csv = read.csv("pred_collected_testing.csv")
+
+```
+
+Next, we create a function to sort the stocks into an arbitrary number of portfolios as described in chapter 4 of "Tidy Finance with R". We use the curly-curly operator to to add flexibility concerning which variable to use for the sorting. This is denoted as "var". We then use quantile() to compute breakpoints for the n number of portfolios. Lastly, we assign portfolios to each stock using the findInterval() function. The function adds a new column that contains the portfolio number to which a stock belongs. The portfolios are reconstituted each month using value weights.
+```{r}
+# Sorting stock into deciles, using ret_excess as sorting variable
+
+# This function allows, by referencing to a dataset, a specific variable and the number of portfolios to create, to divide a dataset into portfolio sorts. It does so 
+
+assign_portfolio <- function(data, var, n_portfolios) {
+  breakpoints <- data %>%
+    summarize(breakpoint = quantile({{ var }}, 
+#quantile() produces - in this case - 10 quantiles to split the data into by a sequences from 0 to 1 by the number of portfolios. Thus creating a breakpoint for which we can split the portfolios into. 
+                                    probs = seq(0, 1, length.out = n_portfolios + 1),
+                                    na.rm = TRUE #Removes all NA's
+    )) %>%
+    pull(breakpoint) %>%
+    as.numeric()
+  
+  data %>%
+    mutate(portfolio = findInterval({{ var }}, #Given a vector of breakpoints, we find the interval containing each element of breakpoints
+                                    breakpoints,
+                                    all.inside = TRUE 
+    )) %>%
+    pull(portfolio) #Returns the portfolio number for each security
+}
+
+
+#calling function to sort stocks into 10 pf's using momentum column in assign_portfolios dataset and add portfolio column to data_for_sorting
+
+```
+
+We now apply the assign_portfolio function to the elastic net and neural network respectively. We sort the stocks into 10 portfolios using the momentum column in the assign_portfolios dataset and add the portfolio column to data_for_sorting.\
+
+A note for the reader: If you run this after you have tuned the model yourself and the fit is in the directory, then rename 'pred_collected_testing_copy' to 'pred_collected_testing' as this will allow you to use your own estimated values instead of the ones that we got earlier. 
+```{r}
+nn_portfolios = pred_collected_testing_csv %>%
+  filter(model == 'nn') %>%
+  group_by(month) %>%
+  mutate(
+    portfolio = assign_portfolio( #calling the function we created earlier to sort stocks into 10 pf's using momentum column in assign_portfolios dataset and add portfolio column to data_for_sorting
+      data = cur_data(), #use current set, i.e. assign_portfolios
+      var = prediction,
+      n_portfolios = 10
+    ),
+    portfolio = as.factor(portfolio))
+
+
+elnet_portfolios = pred_collected_testing_csv %>% # See that this doesn't use the CSV since the Elastic Net doesn't take forever to tune, so we'll let you tune it yourself and see the results. 
+  filter(model == 'elnet') %>%
+  group_by(month) %>%
+  mutate(
+    portfolio = assign_portfolio( #calling the function we created earlier to sort stocks into 10 pf's using momentum column in assign_portfolios dataset and add portfolio column to data_for_sorting
+      data = cur_data(), #use current set, i.e. assign_portfolios
+      var = prediction,
+      n_portfolios = 10
+    ),
+    portfolio = as.factor(portfolio))
+
+```
+
+We now construct a zero-net-investment portfolio that buys the highest expected return stocks and sells the lowest, i.e. we go long in the decile 10 stock and short in the decile 1 stocks. To do this we add 2 columns, breakpoint_low and breakpoint_high to our portfolio sorted datasets for the elastic net and neural network models respectively. We then rename all portfolios that matches the breakpoints to either low or high in order to distinguish between them. We then calculate the value weighted return for the high and low momentum portfolios. After, we subtract the low-portfolio alpha from the high to reflect our trading strategy. Lastly, we make a linear regression of the net zero strategy on the market excess return to see if we are generating positive alpha. 
+```{r}
+strategy_portfolio_elnet = elnet_portfolios %>% 
+  mutate(month = as.Date(month)) %>%
+  mutate(portfolio = as.numeric(portfolio)) %>%
+  group_by(month) %>%
+  mutate(breakpoint_low = 1,
+         breakpoint_high = 10, # We take the portfolios of highest and lowest predicted excess return as a subset to evaluate by creating breakpoints. 
+         portfolio = case_when(portfolio <= breakpoint_low ~ "low",
+                               portfolio >= breakpoint_high ~ "high")) %>% # The portfolios are renamed as low and high to distinguish between one another.
+  group_by(month,portfolio) %>%
+  summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag))  %>% # Value weighted return by high or low grouped momentum values.  
+  pivot_wider(names_from = portfolio, values_from = excess_ret) %>%
+  mutate(high_low = high - low) %>% # subtracting the low-portfolio alpha, hoping that this will be negative and increase the alpha of the strategy. 
+  left_join(factors_ff_monthly, by = "month") %>%
+  lm(high_low ~ 1 + mkt_excess, data = .) %>% broom::tidy() %>% add_column('model' = 'Elastic net', .before = 'term')
+# Again a linear regression of the high-low strategy on market excess return to get the alpha. 
+
+
+strategy_portfolio_nn = nn_portfolios %>% 
+  mutate(month = as.Date(month)) %>%
+  mutate(portfolio = as.numeric(portfolio)) %>%
+  group_by(month) %>%
+  mutate(breakpoint_low = 1,
+         breakpoint_high = 10, # We take the portfolios of highest and lowest predicted excess return as a subset to evaluate by creating breakpoints. 
+         portfolio = case_when(portfolio <= breakpoint_low ~ "low",
+                               portfolio >= breakpoint_high ~ "high")) %>% # The portfolios are renamed as low and high to distinguish between one another.
+  group_by(month,portfolio) %>%
+  summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag))  %>% # Value weighted return by high or low grouped momentum values.  
+  pivot_wider(names_from = portfolio, values_from = excess_ret) %>%
+  mutate(high_low = high - low) %>% # subtracting the low-portfolio alpha, hoping that this will be negative and increase the alpha of the strategy. 
+  left_join(factors_ff_monthly, by = "month") %>%
+  lm(high_low ~ 1 + mkt_excess, data = .) %>% broom::tidy() %>% add_column('model' = 'Neural net', .before = 'term')
+
+
+rbind(strategy_portfolio_elnet, strategy_portfolio_nn) %>%
+  kbl(caption = "Long-short prediction sorted portfolios CAPM Beta and Alpha") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+```
+
+The results can be summarized as follows: Both the elastic net and neural network seem to be able to predict CAPM alpha generating strategies after observing the training set, i.e. excess returns after adjusting for market risk. Contrary to expectation, the elastic net model appears to be the better predictor with the estimated alpha exceeding that of the neural net. Moreover, the CAPM beta is estimated to be lower which implies that the risk profile of the portfolio predicted by the elastic net is lower than that of the neural network. Thus, the complexity of the neural network relative to the elastic net does not result in better out-of-sample predictions. However, it is worth noting that the predicted alpha from both methods fails to show statistical significance at both the 1, 5 and 10 percent confidence level. 
