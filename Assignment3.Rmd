@@ -1,7 +1,7 @@
 ---
-title: "Assignment3"
-author: "Martin, Oliver and Fred"
-date: "6/5/2022"
+title: "MA 3: Portfolio estimation"
+author: "tgx333 \\ lhb642 \\ "
+date: "13/6/2022"
 output:
   html_document: default
   pdf_document: default
@@ -37,7 +37,7 @@ library(rmgarch)
 library(xts)
 ```
 
-We start by loading the CRSP set.
+We start by loading the CRSP data set. To keep the analysis simple we work with a balanced panel and exclude tickers, that are not traded for the full period. We end up with a tradable universe of 731 stocks.  
 ```{r}
 # Select all stocks from the CRSP universe
  tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite",
@@ -49,13 +49,7 @@ crsp_monthly <- tbl(tidy_finance, "crsp_monthly") %>%
   collect() %>%
   mutate(month = as.Date(as.POSIXct.Date(month)))
 
-remove(tidy_finance)
-```
-
-To keep the analysis simple we work with a balanced panel and exclude tickers, which are not traded for the full period. 
-```{r}
-
-# Clean data by removing stocks, which is not traded on every single trading day. 
+# Clean data by removing stocks, which are not traded on every single trading day thourhout the whole sample period. 
 data <- crsp_monthly %>%
   group_by(permno) %>%
   mutate(n=n()) %>%
@@ -66,52 +60,33 @@ data <- crsp_monthly %>%
 remove(crsp_monthly)
 ```
 
-We now turn to produce the summary statistics. From the plot, we find that the universe consists of 731 stocks.
+We now turn to produce the summary statistics.
 ```{r, fig.align = 'center'}
 # Provide a brief summary of the sample:
 
-table = data %>% 
+data %>% 
   summarise(
-        Variable = "Ret_excess",
         "N stocks"  = n_distinct(month),
-        Mean = mean(ret_excess),
-        SD = sd(ret_excess),
-        Min = min(ret_excess),
-        Max = max(ret_excess),
-        Start = min(month),
-        End = max(month)
+        'Start date' = min(month),
+        'End date' = max(month),
+        Mean  = 12*mean(100*ret_excess),
+        'SD' = sqrt(12) * sd(100 * ret_excess),
+        Min = min(100*ret_excess),
+        Max = max(100*ret_excess)
          ) %>%
- mutate(Mean = format(Mean, digits = 2), SD = format(SD, digits = 2),
-        Min = format(Min, digits = 3), Max = format(Max, digits = 3))
-
-ggtable = ggtexttable(table, rows = NULL,
-                       theme = ttheme("classic")) %>%
-  tab_add_title(text = "Summary statistics")
-
-plot = data %>% 
-  select(permno, industry) %>%
-  distinct() %>%
-  group_by(industry) %>%
-  summarise(n = n()) %>%
-  ggplot(aes(x = industry, y = n)) +
-  ggtitle("Number of stocks per industry") +
-  geom_bar(stat="identity", width=.3, fill="tomato3") +
-  labs(x="Industry class",
-         y="Number of stocks") + 
-    theme(axis.text.x = element_text(angle = 45, hjust=1))
-
-# We can arrange the two plots to show them together in one graph. 
-ggarrange(plot, ggtable, nrow = 2,
-                   heights = c(1, 0.5)) 
+ #mutate(Mean = format(Mean, digits = 2), SD = format(SD, digits = 2),
+  #      Min = format(Min, digits = 3), Max = format(Max, digits = 3)) %>%
+  kbl(caption = "Summary statistics for the tradable universe and for annualized excess returns (%)",digits = 1) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
 
 
-
-remove(table,plot,ggtable, lineplot, figure)
+remove(table)
 
 ```
 
 
-To find the optimal weight we incorporate the compute_efficient_weights function from chapter 11.4 in (Scheuss et. al 2022), where mu denotes the historical mean return, sigma is the covariance matrix, gamma is the coefficient of risk aversion (4 by prespecification), lambda is the transaction costs and w_prev is the weight before rebalancing. The function calculates the efficient portfolio weight in general form, while allowing for transaction costs. The transaction costs are conditional on the holdings before reallocation. If lamda (i.e. the transaction costs) are zero, the computation resembles the standard mean-variance efficient framework (CAPM), where the aim is to maximize the sharpe ratio.
+To find the optimal weight we incorporate the 'compute_efficient_weights' function from chapter 11.4 in (Scheuss et. al 2022), where $\mu$ denotes the historical mean return, sigma, $\Sigma$ is the covariance matrix, gamma, $\gamma$, is the coefficient of risk aversion (4 by pre-specification), lambda, $\lambda$ is the transaction costs and w_prev is the weight before re-balancing. The function calculates the efficient portfolio weight in general form, while allowing for transaction costs. The transaction costs are conditional on the holdings before reallocation. The figure shows that if lambda (tr. cost) is zero, the portfolio allocation resembles the standard mean-variance efficient framework, where the aim is to maximize the sharpe ratio.\\ 
+
 ```{r}
 # Function to compute optimal portfolio weights based on inputs. 
 
@@ -134,8 +109,7 @@ efficient_weights <- function(mu, sigma, gamma = 4, lambda, w_prev) {
 ```
 
 
-
-First we calculate the return matrix, where the entire series of returns for each stock is obtained. From this it is possible to calculate the historical mean (mu) and covariance matrix (sigma).
+The first step is to calculate the returns matrix, where the entire series of returns for each stock is obtained. From this it is possible to calculate the historical mean, $\mu$ and covariance matrix, $\Sigma$.
 ```{r}
 # We will need a a (T x N) matrix of returns to compute a matrix of returns: 
 ret_matrix <- data %>%
