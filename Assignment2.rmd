@@ -35,16 +35,13 @@ library(vtable)
 library(keras)
 ```
 
-# 1
+## 1.
+**Remove all observations prior to January 1st, 2005. Instead of running the analysis with all characteristics, select 5 influential characteristics. Discuss your selection choices and clearly state which variables you select!** 
 ```{r}
-#tidy_finance_ML <- dbConnect(SQLite(), "/Users/fredlundahl/Desktop/AEF/data/tidy_finance_ML.sqlite", extended_types = TRUE)
+#Connecting to SQLite, reading in stock_charachteristics_monthly.
+tidy_finance_ML <- dbConnect(SQLite(), "Data/tidy_finance_ML.sqlite", extended_types = TRUE)
 
-#tidy_finance_ML <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance_ML.sqlite", extended_types = TRUE)
-
-# Connecting to SQLite, reading in stock_charachteristics_monthly.
-tidy_finance_ML <- dbConnect(SQLite(), "data/tidy_finance_ML.sqlite", extended_types = TRUE)
-
-  # selecting 5 characteristics and 4 macro variables
+#Selecting 5 characteristics and 4 macro variables
 characteristics <- tbl(tidy_finance_ML, "stock_characteristics_monthly") %>%
   select(month, permno, sic2, ret_excess, mktcap_lag, characteristic_beta, characteristic_turn, characteristic_mom1m, characteristic_mom12m, characteristic_mom36m, macro_dp, macro_ep, macro_bm, macro_ntis) %>%
   collect() %>%
@@ -52,11 +49,9 @@ characteristics <- tbl(tidy_finance_ML, "stock_characteristics_monthly") %>%
 
 
 # Connection to new database to get mkt_excess       
- tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
+tidy_finance <- dbConnect(SQLite(), "data/tidy_finance.sqlite", 
                            extended_types = TRUE)
 
-# tidy_finance <- dbConnect(SQLite(), "/Users/olivernystrom/Desktop/Coding/AEF/Data/tidy_finance.sqlite", 
-                       #    extended_types = TRUE)
 #Reading in factors_ff_monthly dataset
 factors_ff_monthly <- tbl(tidy_finance, "factors_ff_monthly") %>%
   select(month,mkt_excess) %>%
@@ -69,7 +64,9 @@ remove(tidy_finance_ML,tidy_finance)
 
 We have chosen to work with five firm characteristics (beta, turn, mom1m, mom12m and mom36m) and four macro indicators (dp, ep, bm and ntis). Beta is the market beta, which indicates the movement of the individual stock relative to the market. Turn is the turnover of a stock and is a measure of liquidity. Mom1m is the one month momentum, which is included to capture short-term reversal. Mom12m (12 month momentum) is brought as the general momentum measure and mom36m as a long-term reversal indicator. 
 
-Bringing three momentum variables into the model might be a stretch, but these are shown (from variable importance in Gu, Kelly and Xiu (2019)) to be quite significant predictors in asset pricing.  
+Bringing three momentum variables into the model might be a stretch, but these are shown (from variable importance in Gu, Kelly and Xiu (2019)) to be quite significant predictors in asset pricing. \\
+
+### OLIVER OPINION: Skal vi ikke nævne i teksten at vi filtrere data på dato, da dette er en del af spørgsmål 1? Tænker vi kan printe nedenstående del af koden så den kommer med i PDF'en? ###
 
 ```{r}
 # Removing all observations prior to January 1st, 2005 by filtering out earlier dates. 
@@ -80,6 +77,9 @@ data <- characteristics %>%
 remove(characteristics)
 ```
 
+**Provide a brief overview of the included variables, meaningful summary statistics for the number of firms in the sample and illustrations of the macro-economic predictors in your report.** 
+
+The below table displays summary statistics for the variables included in our dataset.
 ```{r}
 
 # Overview of included variables.
@@ -99,12 +99,12 @@ data %>%
 ```
 
 
-Bm is the book-to-market ratio, which measures the total book value (that is, company value from earnings statement) relative to the market value (on the stock market), ntis is the Net Equity Expansion, which measures the ratio of 12-month moving sums of net issues on the NYSE divided by the total end-of-year market cap of NYSE stocks. EP is the earnings-to-price ratio, which is the difference between the log of earnings and the log of prices. DP is the Dividend-Price ration, which is the difference between log of dividends and log of prices. 
+The book-to-market ratio measures the total book value (that is, company value from earnings statement) relative to the market value (on the stock market). The Net Equity Expansion measures the ratio of 12-month moving sums of net issues on the NYSE divided by the total end-of-year market cap of NYSE stocks. Earnings-price is the earnings-to-price ratio, which is the difference between the log of earnings and the log of prices. The Dividend-Price ratio is the difference between log of dividends and log of prices. \\
 
-
+The below figure displays the number of firms per industry represented in the dataset according to the Standard Industrial Classification (2-digit SIC). The figure only includes industries with +50 companies, as below values are deemed less relevant.
 ```{r} 
 # Statistics of firms and industries.
-barplot = data %>% 
+data %>% 
   select(permno, sic2) %>%
   distinct() %>%
   group_by(sic2) %>%
@@ -116,11 +116,16 @@ barplot = data %>%
   level = sic2) +
   geom_bar(stat="identity", width=.5, fill="tomato3") +
   labs(x="Industry class",
-         y="Number of firms",
-       caption = "Only includes industries with +50 companies, as below values are less relevant")
+         y="Number of firms") 
+  
+
   
 ```
 
+The below figures are illustrations of the macroeconomic variables included in the dataset. KOMMENTERING
+
+###OLIVER OPINION: LAD OS KOMMENTERE PÅ DET VI SER MED ET PAR SÆTNINGER HER###
+###DESUDEN SKAL barplot ikke vises her nede, og vi skal have rykket headeren op i ovenstående snippet###
 ```{r,echo=FALSE, fig.align = 'center'}
 # Illustrations of macroeconomic predictors
 plot_ntis_bm = data %>% 
@@ -165,8 +170,11 @@ ggarrange(barplot,   # First row with bar plot
 
 #remove(plot_ntis_bm,plot_ep_dp)
 ```
+**Create a recipe from tidymodels to perform two further data cleaning steps.**
 
-We create a recipe from tidymodels to perform two further cleaning steps: 1) to locate all interacting terms between the macro indicators and company characteristics, and 2) to modify the industry specific value into a dummy variable, since this format is more friendly to machine learning. 
+We create a recipe from tidymodels to perform two further cleaning steps: 1) to locate all interacting terms between the macro indicators and company characteristics, and 2) to modify the industry specific value into a dummy variable, since this format is more friendly to machine learning. \\
+
+After specifying the recipe-steps that should transform the data into something more machine learning-friendly, we can estimate a model.
 
 ```{r}
 # We need sic2 to be a factor and not just a categorical variable, since this allow us to interpret the levels (values) as 0's and 1's. 
@@ -196,28 +204,38 @@ recipe = recipe(ret_excess ~  ., data = training(newsplit)) %>% # True training 
   
 ```
 
-After specifying the recipe-steps that should transform the data into something more machine learning-friendly, we can estimate a model. 
+## 2.
+**Discuss potential limitations or alternatives of this modeling approach.**
 
-# 2 
-As described in the paper, one limitation to the modelling approach relies on the fact that the function for the conditional expected return $g^*(·)$ does not depend on neither i nor t. This implies that the function retains the same form over time and it relies on the entire panel of stocks. While this brings stability to the model, it comes with the cost that the ability to estimate risk premiums for individual stocks is significantly reduced. Furthermore, the function depends on the vector of predictors, z, only through $z_{i,t}$. This implies that the prediction uses information strictly from the i'th stock at time t. Thus, historical observation are not accounted for. \
+As described in the paper, one limitation to the modelling approach lies in the fact that the function for the conditional expected return $g^*(·)$ does not depend on neither i nor t. This implies that the function retains the same form over time and it relies on the entire panel of stocks. While this brings stability to the model, it comes with the cost that the ability to estimate risk premiums for individual stocks is significantly reduced. Furthermore, the function depends on the vector of predictors, z, only through $z_{i,t}$. This implies that the prediction uses information strictly from the i'th stock at time t. Thus, historical observation are not accounted for. \
 
 As for the estimation approaches, there are limitations associated with all of those employed by the authors. Firstly, a limitation to the penalized regression stems from the fact that shrinkage and variable selection is forcing coefficients on most regressors close or exactly to zero when managing high dimensionality which can produce suboptimal forecasts in cases where predictors are have high correlations. On page 2235, an example is provided: "A simple example (...) is a case in which all of the predictors are equal to the forecast target plus an iid noise term. In this situation, choosing a subset of predictors via lasso penalty is inferior to taking a simple average of the predictors and using this as the sole predictor in a univariate regression".Secondly, when using a random forest model for estimation, one pro of the framework is that it makes the model very flexible. As summarized by the authors on pages 2240-2241: "Advantages (...) are that it is invariant to monotonic transformations of predictors, that it naturally accommodates categorical and numerical data in the same model, that it can approximate potentially severe nonlinearities, and that a tree of depth L can capture (L−1)-way interactions". However, this also implies the limitation that tree models usually suffers from overfitting, which requires thorough regularization of the model. As for the neural network, the complexity of the models makes them suffer from being non-transparent, non-interpretable and highly parameterized, which makes them difficult to use. Furthermore, the structure of neural networks makes cross-validation a difficult task during model selection process, which in this case leads the authors to fix a selection of network architectures ex ante for estimation, i.e., they take a guess. \
+
+**Consider next how one could map the linear factor model representation of the expected asset’s excess returns based on Arbitrage Pricing Theory into the framework above.**
 
 As described in the paper, the model deviates from standard asset pricing approaches because the function for $g^*(·)$ maintains the same form over time and across stocks instead of reestimating a cross-sectional model in each period or for each stock independently. Therefore, two alternative modelling approaches could be ones that would do just that. A) in each period, we reestimate $g^*(·)$ as a cross-sectional model and B) we estimate $g^*(·)$ as a time-series model for each stock individually. \
 
 A third alternative is to utilize simple variations of OLS-regressions. Making use of the APT, one could map the linear factor model for excess returns using betas for various factors that affect or are believed to affect returns. This would be done with an OLS-regression. The benefit of the OLS-regression compared to ML-approaches is that OLS would produce an unbiased estimator of excess returns, while ML-models produce an estimate that is, to some extent, biased. Z in the APT-model would be all included predictors of excess returns, the regressors. The functional form of the APT would be linear.
 
-# 3
+## 3.
+**Briefly describe the purpose of the “hyperparameter” selection procedure.**
+
 The objective function is to minimize the root mean squared prediction error (RMSE) of the ML-model. That is, to estimate a model that predicts excess returns as well as possible. The hyperparameter tuning process involves a step-wise process, where the engine tries out several different combinations of the parameters. For a Elastic Net model, this would indicate different values of penalties and alpha (the mixture between Ridge and Lasso). The hyperparameters are thus tuned so that MPSE is minimized. \
 
 When the goal of a specific model is prediction, then the means to get there is to minimize i.e., RMSE (to get the best average prediction), whereas if the goal is to uncover the most consistent model, you would want to use all of your data to get the best fit. Thus to minimize RMSE you need both training and testing data to verify that your model actually works when encountered with new data - otherwise the RMSE would take off in reality. \
 
+**Briefly discuss possible limitations or alternatives to selecting tuning parameters from the data in a validation sample.**
+
 Selecting hyperparameters from a validation dataset can be problematic for a number of reasons. The validation dataset can be too small - and if this is the case, then a worry is that it might consist of data that poorly reflects other data if some specific events are dominating the validation set. The validation dataset might require you to shrink your training set, which will lessen the estimation possibilities. \
+
+**Next, split the dataset into three distinct samples. Provide a clear statement regarding your choices and considerations for the size of training and validation set in the report. **
 
 As we have already split the dataset into a training (80$\%$) and a test set (20$\%$), we will now further split the training set into a training and validation set. The new training set will thus include 53$\%$ of the original data and the validation set will include 27$\%$. The reasononing behind the additional split of the training set is that we want a reliable model. If the split is not performed, then the results will be biased and we might end up with a false impression of the model accuracy. The training set will be fed in the learning phase to obtain patterns in the data. The validation set is used to validate the model performance during the training phase and provides information helpful in tuning the models hyperparameters. The test set is totally seperated from the training phase and will only be used to test the model after completing training to provide an unbiased performance metric. 
 
 
-# 4
+## 4.
+**Implement and train two different machine learning methods discussed in the lecture to forecast excess returns as in Gu et al (2020). Provide a brief description how each of your chosen method works.** 
+
 We start by specifying the models for which we plan to test. This includes an Elastic Net (EN) model for which we tune the penalty term and mixture (between Ridge and Lasso estimation), and a Neural Network (NN), where we tune the number of epochs. Due to constraints on computing power, we have chosen not to tune any more hyperparameters on the NN, since this simple tuning procedure lasted +8 hours. 
 
 In an elastic net, we specify a model where we, through tuning of hyperparameters, take decisions on the mixture between Lasso and Ridge regression. In Lasso regression, coefficients on a subset of covariates are set to zero which means that Lasso can be thought of as a variable selection method. We do not want to include all variables with possible explanatory power in the model, only variables that have a large enough effect. The Ridge draws all coefficient estimates closer to zero and can therefore be seen as penalization on regressor variance. An elastic net is a combination of these models.\
@@ -310,6 +328,11 @@ fit_nn_model <- nn_fit %>%
   fit(data = training(newsplit))
 ```
 
+**Provide a table which illustrates the set of hyperparameters and their potential values used for tuning each machine learning model similar to Table A.5 in the Online Appendix of Gu et al (2020).**
+
+The below figure illustrates the effects of different hyperparameters on the predictive performance of the models. As visible in the figure, XX...
+
+###OLIVER SUGGESTS: KOMMENTER KORT. HVAD VISER PLOTTET????###
 ```{r fig.align = 'center', fig.width=8, fig.height=4}
 # Illustrations of effects of different hyperparameters on predictive performance. 
 
@@ -324,7 +347,7 @@ autoplot(en_tune, metric = "rmse") +
 #       subtitle = "Lasso (1.0), Ridge (0.0), and Elastic Net (0.5) with different levels of regularization.")
 ```
 
-
+###OLIVER SUGGESTS: SKAL VI OVERHOVEDET BRUGE DEN HER DEL?
 ```{r, eval = FALSE}
 # We want to make clear, that due to the extensive tuning time of the nn model, we have added an option, where we have pre-loaded the tuning results into a csv-file, which can be displayed, if you as a user do not have time to wait out the tuning process. 
 
@@ -371,12 +394,10 @@ Also, Lasso and Elastic Net models with high penalization terms perform well. A 
 
 For the Neural Network model, we receive the lowest RMSE through models with 10 epochs (training cycles through the dataset). The simpler NN is by far more precise than the complex one with 1000 epochs.  More precisely, the hyperparameters chosen for the models are a Ridge regression with penalization of 0.77, and a Neural Network with 10 epochs and 15 hidden units.\
 
+**Provide some meaningful illustration of the effect of different hyperparameters on the predictive performance in the training and validation set.**
+
 Having fitted the model we are now able to use it for making predictions. We gather all predictions as a vector and all actual observations as well for comparison. 
 
-
-
-
- 
 ```{r, eval = FALSE}
 # We want to make clear, that due to the extensive tuning time of the nn model, we have added an option, where we have pre-loaded the tuning results into a csv-file, which can be displayed, if you as a user do not have time to wait out the tuning process. All we have done is saving our results into a csv, which we can visualize to show our results. If you do run the code, then all you need to do is run line 351, then you will get your own results shown.  
 
@@ -419,6 +440,8 @@ en_tune %>%
 
 ```
 
+**Discuss and interpret the relation between model complexity and mean squared prediction error in training and validation set.**
+
 The complexity of a model and it's hyperparameters is best illustrated as an issue of the bias-variance trade-off, which is the relation between model complexity and flexibility. A highly complex model might have a low bias, since it's well specified, but will encounter a high variance, since the model is too complex to understand patterns in unknown data - thus it is overfitted. On the other hand a model that's too general might not capture the underlying structure in the data, which we state as being underfitted. These models will usually have a high bias and a low variance, since the model wouldn't know how to read patterns in the data, thus the predictions will be less varying. 
 
 In the case of this analysis it can be a bit difficult to discuss the complexity relationship, since the models themselves are not very complex. Usually, the neural net would be the most complex model, but in this case we only have two combinations of the model, which consists of 'epochs' of 10 and 1000. Nevertheless, it's still clear to see that the more simple model
@@ -427,7 +450,9 @@ is the best performing with a rmse of 0.24 against 1.24 for the model with 1000 
 The rmse of both models are lower in the validation set, which is an indication of two well specified models. Furthermore, the validation set is randomly picked throughout the time series, why the lower rmse has nothing to do with certain time periods being easier to predict. 
 
 
-# 5
+## 5.
+**Use the 2 selected and fitted models to generate monthly predictions for a machine learning portfolio as described in Section 2.4.2 in Gu et al (2020) for the withheld dataset containing the most recent 20% of the observations.**
+
 We start out by taking the out-of-sample ("testing(split)") stock return prediction for our tuned elastic net and neural network models. For the convenience of the reader, we store our results in a csv-file that the reader may refer to when going through our interpretation.  
 ```{r, eval = FALSE}
 # First, calculate out-of-sample predictions for both models:
@@ -454,6 +479,8 @@ pred_collected_testing_csv = read.csv("pred_collected_testing.csv")
 ```
 
 Next, we create a function to sort the stocks into an arbitrary number of portfolios as described in chapter 4 of "Tidy Finance with R". We use the curly-curly operator to to add flexibility concerning which variable to use for the sorting. This is denoted as "var". We then use quantile() to compute breakpoints for the n number of portfolios. Lastly, we assign portfolios to each stock using the findInterval() function. The function adds a new column that contains the portfolio number to which a stock belongs. The portfolios are reconstituted each month using value weights.
+
+###OLIVER SUGGESTION: SKAL VI PRINTE FUNKTIONEN?###
 ```{r}
 # Sorting stock into deciles, using ret_excess as sorting variable
 
@@ -511,7 +538,9 @@ elnet_portfolios = pred_collected_testing_csv %>% # See that this doesn't use th
 
 ```
 
-We now construct a zero-net-investment portfolio that buys the highest expected return stocks and sells the lowest, i.e. we go long in the decile 10 stock and short in the decile 1 stocks. To do this we add 2 columns, breakpoint_low and breakpoint_high to our portfolio sorted datasets for the elastic net and neural network models respectively. We then rename all portfolios that matches the breakpoints to either low or high in order to distinguish between them. We then calculate the value weighted return for the high and low momentum portfolios. After, we subtract the low-portfolio alpha from the high to reflect our trading strategy. Lastly, we make a linear regression of the net zero strategy on the market excess return to see if we are generating positive alpha. 
+**Finally, construct a zero-net-investment portfolio that buys the highest expected return stocks (decile 10) and sells the lowest (decile 1).**
+
+We construct a zero-net-investment portfolio that buys the highest expected return stocks and sells the lowest, i.e. we go long in the decile 10 stock and short in the decile 1 stocks. To do this we add 2 columns, breakpoint_low and breakpoint_high to our portfolio sorted datasets for the elastic net and neural network models respectively. We then rename all portfolios that matches the breakpoints to either low or high in order to distinguish between them. We then calculate the value weighted return for the high and low momentum portfolios. After, we subtract the low-portfolio alpha from the high to reflect our trading strategy. Lastly, we make a linear regression of the net zero strategy on the market excess return to see if we are generating positive alpha. 
 ```{r}
 strategy_portfolio_elnet = elnet_portfolios %>% 
   mutate(month = as.Date(month)) %>%
@@ -551,5 +580,6 @@ rbind(strategy_portfolio_elnet, strategy_portfolio_nn) %>%
   kable_classic(full_width = F, html_font = "Cambria")
 
 ```
+**Discuss your findings in a meaningful way**
 
 The results can be summarized as follows: Both the elastic net and neural network seem to be able to predict CAPM alpha generating strategies after observing the training set, i.e. excess returns after adjusting for market risk. Contrary to expectation, the elastic net model appears to be the better predictor with the estimated alpha exceeding that of the neural net. Moreover, the CAPM beta is estimated to be lower which implies that the risk profile of the portfolio predicted by the elastic net is lower than that of the neural network. Thus, the complexity of the neural network relative to the elastic net does not result in better out-of-sample predictions. However, it is worth noting that the predicted alpha from both methods fails to show statistical significance at both the 1, 5 and 10 percent confidence level. 
