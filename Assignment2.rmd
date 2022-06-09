@@ -61,10 +61,11 @@ factors_ff_monthly <- tbl(tidy_finance, "factors_ff_monthly") %>%
 dbDisconnect(tidy_finance_ML,tidy_finance)
 remove(tidy_finance_ML,tidy_finance)
 ```
+The following analysis is based on a data set with 744088 observations with different variables which describe industry and macro characteristics. In this paper, we focus on 9 variables where 5 are industry specific and 4 are macroeconomic. \
 
-We have chosen to work with five firm characteristics (beta, turn, mom1m, mom12m and mom36m) and four macro indicators (dp, ep, bm and ntis). Beta is the market beta, which indicates the movement of the individual stock relative to the market. Turn is the turnover of a stock and is a measure of liquidity. Mom1m is the one month momentum, which is included to capture short-term reversal. Mom12m (12 month momentum) is brought as the general momentum measure and mom36m as a long-term reversal indicator. 
+We have chosen to work with the following five firm characteristics: beta, turn, mom1m, mom12m and mom36m. Beta is the market beta, which indicates the movement of the individual stock relative to the market. Turn is the turnover of a stock and is a measure of liquidity. Mom1m is the one month momentum, which is included to capture short-term reversal. Mom12m (12 month momentum) is brought as the general momentum measure and mom36m as a long-term reversal indicator. Bringing three momentum variables into the model might be a stretch, but these are shown (from variable importance in Gu, Kelly and Xiu (2019)) to be quite significant predictors in asset pricing.\
 
-Bringing three momentum variables into the model might be a stretch, but these are shown (from variable importance in Gu, Kelly and Xiu (2019)) to be quite significant predictors in asset pricing. \\
+Moreover, the following four macro indicators are included: dp, ep, bm and ntis, where dp is the dividend-price ratio, ep is the earnings-price ratio, bm is the book-to-market ratio and ntis is the net equity expansion. 
 
 ### OLIVER OPINION: Skal vi ikke nævne i teksten at vi filtrere data på dato, da dette er en del af spørgsmål 1? Tænker vi kan printe nedenstående del af koden så den kommer med i PDF'en? ###
 
@@ -89,7 +90,7 @@ data %>%
     summ = c('mean(x)','sd(x)','min(x)','pctile(x)[25]','pctile(x)[75]','max(x)'),
     summ.names = c('Mean','Sd.','Min','Pctl. 25','Pctl. 75','Max'),
      labels = c('Return excess','Market beta',
-                       'Turnover','Momentum (1)','Momentum (12)','Momentum (36)', 'Dividend-Price','Earnings-price','Book-Market', 'Net Eqiuty Expansion'),
+                       'Turnover','Momentum (1)','Momentum (12)','Momentum (36)', 'Dividend-Price','Earnings-price','Book-Market', 'Net Equity Expansion'),
     digits = 2,
     out = "return") %>%
   kbl(caption = "Summary table of variables") %>%
