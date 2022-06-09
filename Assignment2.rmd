@@ -77,7 +77,7 @@ Our first step is to remove all observations prior to January 1st 2005. This is 
 ```{r echo=TRUE}
 # Removing all observations prior to January 1st, 2005 by filtering out earlier dates. 
 data <- characteristics %>%
-  filter(month >= "2019-01-01") %>%
+  filter(month >= "2015-01-01") %>%
   drop_na()
 
 remove(characteristics)
@@ -182,9 +182,6 @@ We create a recipe from tidymodels to perform two further cleaning steps: 1) to 
 After specifying the recipe-steps that should transform the data into something more machine learning-friendly, we can estimate a model.
 
 ```{r}
-# We need sic2 to be a factor and not just a categorical variable, since this allow us to interpret the levels (values) as 0's and 1's. 
-#data = data %>%
- # mutate(sic2 = as.factor(sic2)) #dummy vars
 
 # Splitting, 20% of data for testing
 split <- initial_time_split(
@@ -203,7 +200,7 @@ recipe = recipe(ret_excess ~  ., data = training(newsplit)) %>% # True training 
   step_normalize(c(contains("characteristic"),contains("macro"))) %>%
   step_center(ret_excess, skip = TRUE) %>%
   step_interact(terms = ~ contains("characteristic"):contains("macro")) %>%
-  #step_mutate(one_hot(as.data.table(sic2))) %>%
+ # step_mutate(one_hot(as.data.table(sic2))) %>%
   step_rm(month, mktcap_lag, sic2, permno)
   
   
@@ -251,8 +248,16 @@ Neural networks takes information from an input layer, through one or multiple h
 Next, we set up a cross validation technique - in our case the K-fold cross-validation. The idea behind the technique consists of evaluating performance of 10 different subsets of the training data and calculating average prediction error. We split the training data into three years of data and asses this on two years. This is a general step that we will utilize for both models. 
 
 ```{r}
+
 # K fold cross validation for both models. 
-data_folds <- vfold_cv(training(newsplit), v = 2)
+data_folds <- time_series_cv(
+  data        = training(newsplit),
+  date_var    = month,
+  initial     = "3 years",# changes these when adding all the data
+  assess      = "2 years", # changes these when adding all the data
+  cumulative  = FALSE,
+  slice_limit = 2
+)
 ```
 
 ```{r}
@@ -274,15 +279,10 @@ lm_fit <- workflow() %>%
   add_model(lm_model)
 
 
-### Neural Network
+### Random Forest
 
 # Specifying a model (only partly tuning, due to computation time)
-nnet_model <- mlp(
-  epochs = tune(),
-  hidden_units = 15
-  ) %>%
-  set_mode("regression") %>%
-  set_engine("keras", verbose = 0)
+
 
 rf_model <- rand_forest(
   trees = 50,
@@ -291,10 +291,7 @@ rf_model <- rand_forest(
   set_engine("ranger") %>%
   set_mode("regression")
 
-# Combining model and recipe into a workflow
-nn_fit <- workflow() %>%
-  add_recipe(recipe) %>%
-  add_model(nnet_model)
+
 
 rf_fit <- workflow() %>%
   add_recipe(recipe) %>%
@@ -316,9 +313,6 @@ lm_tune <- lm_fit %>%
     metric = "rmse"
   )
 
-
-
-
 # Creating final workflow where the best parameters are added.
 fit_lm_model <- lm_fit %>%
   finalize_workflow(parameters = lm_tune %>% select_best(metric = 'rmse')) %>%
@@ -329,10 +323,10 @@ fit_lm_model <- lm_fit %>%
 
 # Random Forest model:
 
-rf_tune <- rf_fit %>% # We mistakenly name the neural net = lm_tune, even though this is the name we use for the linear regression
+rf_tune <- rf_fit %>%
   tune_grid(
     resample = data_folds,
-    grid = grid_regular(min_n(), levels = 2),   # Tuning
+    grid = grid_regular( min_n(), levels =  3),   # Tuning
     metric = "rmse"
   )
 
@@ -345,7 +339,7 @@ fit_rf_model <- rf_fit %>%
 
 **Provide a table which illustrates the set of hyperparameters and their potential values used for tuning each machine learning model similar to Table A.5 in the Online Appendix of Gu et al (2020).**
 
-The below figure illustrates the effects of different hyperparameters on the predictive performance of the models. The figure shows the development of the cross-validated prediction errors as the amount of regularization increases. As visible in the figure, all three models show a drop in the prediction errors as the regularization increases, however, this jumps back up after a certain point. Moreover, the errors of both the Elastic Net and Lasso estimates decreases with less regularization relative to the Ridge regression. We recall that the models become more restricted as the regularization increases. Thus, we aim to choose the model which exhibits the lowest MSPE while limiting the amount of regularization. In this case, we therefore would argue for the Lasso model (blue) as it shows a faster decrease in the MSPE than the elastic net while hitting its minimum at a lower level of regularization than the Ridge model.
+The below figure illustrates the effects of different hyperparameters on the predictive performance of the models. The figure shows the development of the cross-validated prediction errors as the amount of regularization (penalization) increases. As visible in the figure, all three models show a drop in the prediction errors as the regularization increases, however, this jumps back up after a certain point. Moreover, the errors of both the Elastic Net and Lasso estimates decreases with less regularization relative to the Ridge regression. We recall that the models become more restricted as the regularization increases. Thus, we aim to choose the model which exhibits the lowest RMSE while limiting the amount of regularization. In this case, we therefore would argue for the Lasso model (blue) as it shows a faster decrease in the MSPE than the elastic net while hitting its minimum at a lower level of regularization than the Ridge model.
 
 
 ```{r fig.align = 'center', fig.width=8, fig.height=4}
@@ -356,10 +350,11 @@ autoplot(lm_tune, metric = "rmse") +
        title = "RMSE for excess returns",
        subtitle = "Lasso (1.0), Ridge (0.0), and Elastic Net (0.5) with different levels of regularization.")
 
-# autoplot(lm_tune) +
-#  labs(y = "Root mean-squared prediction error",
-#       title = "RMSE for excess returns",
-#       subtitle = "Lasso (1.0), Ridge (0.0), and Elastic Net (0.5) with different levels of regularization.")
+ autoplot(rf_tune, , metric = "rmse") +
+  labs(y = "Root mean-squared prediction error",
+       title = "RMSE for various minimal node sizes in Random Forest")
+
+remove()
 ```
 
 ```{r, eval = FALSE}
@@ -376,7 +371,7 @@ pred_collected_validation <- tibble(
                values_to = 'prediction')
 
 ```
-After tuning the Elastic Net and Random Forest, we can extract the best performing hyperparameter combinations from the data tested on the validation set. The two best performing models are very close when comparing the rmse of the validation sample. The NN has a rmse of 0.1615, while the EN model has a loss of 0.1658. 
+After tuning the Elastic Net (EN) and Random Forest (RF), we can extract the best performing hyperparameter combinations from the data tested on the validation set. The two best performing models are very close when comparing the rmse of the validation sample. The RF has a rmse of 0.155, while the EN-model has a loss of 0.165. 
 
 ```{r}
  
@@ -385,30 +380,27 @@ pred_collected_validation %>%
   yardstick::rmse(truth = actual, estimate = prediction) %>% 
   select(model, .estimate) %>%  rename('rmse' = '.estimate') %>%
   arrange(rmse) %>% 
-  kbl(caption = "Validation set prediction error") %>%
+  kbl(caption = "Validation set prediction error", digits = 3) %>%
   kable_classic(full_width = F, html_font = "Cambria")
 ```
-From the graph, it becomes visible that the model performing best in terms of minimizing RMSE is, for the Elastic Net, a model that take 0 of Lasso, meaning a Ridge regression, and a penalization term of 0.077.
-Also, Lasso and Elastic Net models with high penalization terms perform well. A Lasso regression performs the best but Elastic Net and Ridge falls just slightly behind. \
-
-For the Neural Network model, we receive the lowest RMSE through models with 10 epochs (training cycles through the dataset). The simpler NN is by far more precise than the complex one with 1000 epochs.  More precisely, the hyperparameters chosen for the models are a Ridge regression with penalization of 0.77, and a Neural Network with 10 epochs and 15 hidden units.\
 
 **Provide some meaningful illustration of the effect of different hyperparameters on the predictive performance in the training and validation set.**
 
-Having fitted the model we are now able to use it for making predictions. We gather all predictions as a vector and all actual observations as well for comparison. 
+
 
 ```{r}
 
 rf_tune %>%
   show_best(metric = "rmse",n=10) %>%
     select(-.metric,-n, -.estimator, 'rmse' = mean, 'model' = .config) %>% relocate(model) %>%
-  add_column('N trees' = 15, .before = 'rmse') %>%
+  add_column('N trees' = 50, .before = 'rmse') %>%
   #add_column('engine' = 'keras', .before = 'epochs') %>%
   add_column('top' = 1:2, .before = 'model')  %>%
-  kbl(caption = "Top 2 hyperparameter combinations for Neural Network") %>%
+  kbl(caption = "Top 2 hyperparameter combinations for Neural Network", digits = 3) %>%
   kable_classic(full_width = F, html_font = "Cambria")
  
 ```
+We have created two different models by the Random Forest method. Due to restrictions on computation power it was only possible to tune one hyperparameter on three levels. The minimal amount of nodes per three was tuned, and as the table above shows, the best performing model had 21 "min_n". RMSE of 0.279 was very close to the model of 40 min_n (rmese = 0.28), and far from the one with 2 (0.299), thus assessing that the larger the value, the better the model in this case.  \\
 
 
 
@@ -422,8 +414,8 @@ lm_tune %>%
   kbl(caption = "Top 10 hyperparameter combinations for Elastic Net model") %>%
   kable_classic(full_width = F, html_font = "Cambria")
 
-
 ```
+For the Elastic Net both penalty rate and mixture was tuned. The best model has a penalty of 1 and mixture of 0. It's difficult to conclude on this, since the other good models have dissimilar penalty rates and mixtures meaning that no level in general is preferable. 
 
 **Discuss and interpret the relation between model complexity and mean squared prediction error in training and validation set.**
 
@@ -463,7 +455,7 @@ Next, we create a function to sort the stocks into an arbitrary number of portfo
 
 assign_portfolio <- function(data, var, n_portfolios) {
   breakpoints <- data %>%
-    summarize(breakpoint = quantile({{ var }}, 
+    summarise(breakpoint = quantile({{ var }}, 
 #quantile() produces - in this case - 10 quantiles to split the data into by a sequences from 0 to 1 by the number of portfolios. Thus creating a breakpoint for which we can split the portfolios into. 
                                     probs = seq(0, 1, length.out = n_portfolios + 1),
                                     na.rm = TRUE #Removes all NA's
@@ -515,7 +507,7 @@ elnet_portfolios = pred_collected_testing %>%
 
 **Finally, construct a zero-net-investment portfolio that buys the highest expected return stocks (decile 10) and sells the lowest (decile 1).**
 
-We construct a zero-net-investment portfolio that buys the highest expected return stocks and sells the lowest, i.e. we go long in the decile 10 stock and short in the decile 1 stocks. To do this we add 2 columns, breakpoint_low and breakpoint_high to our portfolio sorted datasets for the elastic net and neural network models respectively. We then rename all portfolios that matches the breakpoints to either low or high in order to distinguish between them. We then calculate the value weighted return for the high and low momentum portfolios. After, we subtract the low-portfolio alpha from the high to reflect our trading strategy. Lastly, we make a linear regression of the net zero strategy on the market excess return to see if we are generating positive alpha. 
+We construct a zero-net-investment portfolio that buys the highest expected return stocks and sells the lowest, i.e. we go long in the decile 10 stock and short the decile 1 stocks. To do this we add 2 columns, breakpoint_low and breakpoint_high to our portfolio sorted table for the elastic net and neural network models respectively. We then rename all portfolios that matches the breakpoints to either low or high in order to distinguish between them. We then calculate the value weighted return for the high and low momentum portfolios. After, we subtract the low-portfolio alpha from the high to reflect our trading strategy. Lastly, we make a linear regression of the net zero strategy on the market excess return to see if we are generating positive alpha. 
 ```{r}
 strategy_portfolio_elnet = elnet_portfolios %>% 
   mutate(month = as.Date(month)) %>%
@@ -534,7 +526,7 @@ strategy_portfolio_elnet = elnet_portfolios %>%
 # Again a linear regression of the high-low strategy on market excess return to get the alpha. 
 
 
-strategy_portfolio_nn = nn_portfolios %>% 
+strategy_portfolio_nn = rf_portfolios %>% 
   mutate(month = as.Date(month)) %>%
   mutate(portfolio = as.numeric(portfolio)) %>%
   group_by(month) %>%
@@ -557,4 +549,4 @@ rbind(strategy_portfolio_elnet, strategy_portfolio_nn) %>%
 ```
 **Discuss your findings in a meaningful way**
 
-The results can be summarized as follows: Both the elastic net and neural network seem to be able to predict CAPM alpha generating strategies after observing the training set, i.e. excess returns after adjusting for market risk. Contrary to expectation, the elastic net model appears to be the better predictor with the estimated alpha exceeding that of the neural net. Moreover, the CAPM beta is estimated to be lower which implies that the risk profile of the portfolio predicted by the elastic net is lower than that of the neural network. Thus, the complexity of the neural network relative to the elastic net does not result in better out-of-sample predictions. However, it is worth noting that the predicted alpha from both methods fails to show statistical significance at both the 1, 5 and 10 percent confidence level. 
+The results can be summarized as follows: Both the elastic net and Random Forest seem to be able to generate CAPM alpha, i.e. excess returns after adjusting for market risk. As expected, the Random Forest model appears to be the better predictor with an alpha of 0.078 exceeding that of the Elastic Net of 0.027. Moreover, the CAPM beta is estimated to be lowest for the Elastic Net, which implies that the risk profile of the portfolio is higher than that of the Random Forest. Thus, the complexity of the RF relative to the EN does result in better out-of-sample predictions. However, it is worth noting that the predicted alpha from both methods fails to show statistical significance at both the 1, 5 and 10 percent confidence level. 
