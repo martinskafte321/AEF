@@ -72,7 +72,7 @@ factors_ff_monthly <- tbl(tidy_finance, "factors_ff_monthly") %>%
 dbDisconnect(tidy_finance_ML,tidy_finance)
 remove(tidy_finance_ML,tidy_finance)
 ```
-Our first step is to remove all observations prior to January 1st 2005. The following analysis is then based on the remaining data set which consists of 744088 observations with different variables which describe industry and macro characteristics. In this paper, we focus on 9 variables where 5 are industry specific and 4 are macroeconomic. \
+Our first step is to remove all observations prior to January 1st 2005. This is done below. The following analysis is then based on the remaining data set which consists of 744088 observations with different variables which describe industry and macro characteristics. In this paper, we focus on 9 variables where 5 are industry specific and 4 are macroeconomic. \
 
 ```{r echo=TRUE}
 # Removing all observations prior to January 1st, 2005 by filtering out earlier dates. 
@@ -85,8 +85,7 @@ remove(characteristics)
 
 We have chosen to work with the following five firm characteristics: beta, turn, mom1m, mom12m and mom36m. Beta is the market beta, which indicates the movement of the individual stock relative to the market. Turn is the turnover of a stock and is a measure of liquidity. Mom1m is the one month momentum, which is included to capture short-term reversal. Mom12m (12 month momentum) is brought as the general momentum measure and mom36m as a long-term reversal indicator. Bringing three momentum variables into the model might be a stretch, but these are shown (from variable importance in Gu, Kelly and Xiu (2019)) to be quite significant predictors in asset pricing.\
 
-Moreover, the following four macro indicators are included: dp, ep, bm and ntis, where dp is the dividend-price ratio which denotes a shares dividend as a percentage of its price, ep is the earnings-price ratio which shows a company's earnings per share relative to its price, bm is the book-to-market ratio, i.e. the value as per assets minus liabilities relative to the market value and ntis is the net equity expansion which denotes the ratio of twelve-month moving sums of net issues by listed
-stocks to total end-of-year market capitalization of same listed stocks. All variables are deemed relevant indicators when one aims at either investigating the economic outlook of firms (dp, ntis) or taking the temperature of the market, i.e. measuring how aggressively investors approach investments (ep, bm). \
+Moreover, the following four macro indicators are included: dp, ep, bm and ntis. The book-to-market ratio measures the total book value (that is, company value from earnings statement) relative to the market value (on the stock market). The Net Equity Expansion measures the ratio of 12-month moving sums of net issues on the NYSE divided by the total end-of-year market cap of NYSE stocks. Earnings-price is the earnings-to-price ratio, which is the difference between the log of earnings and the log of prices. The Dividend-Price ratio is the difference between log of dividends and log of prices. All variables are deemed relevant indicators when one aims at either investigating the economic outlook of firms (dp, ntis) or taking the temperature of the market, i.e. measuring how aggressively investors approach investments (ep, bm). \
 
 **Provide a brief overview of the included variables, meaningful summary statistics for the number of firms in the sample and illustrations of the macro-economic predictors in your report.** 
 
@@ -97,8 +96,8 @@ The below table displays summary statistics for the variables included in our da
 data %>%
   select(-month, -sic2, -permno, -mktcap_lag) %>%
   sumtable(
-    summ = c('mean(x)','sd(x)','min(x)','pctile(x)[25]','pctile(x)[75]','max(x)'),
-    summ.names = c('Mean','Sd.','Min','Pctl. 25','Pctl. 75','Max'),
+    summ = c('mean(x)','sd(x)','min(x)','pctile(x)[25]','pctile(x)[50]','pctile(x)[75]','max(x)'),
+    summ.names = c('Mean','Sd.','Min','Pctl. 25','Median','Pctl. 75','Max'),
      labels = c('Return excess','Market beta',
                        'Turnover','Momentum (1)','Momentum (12)','Momentum (36)', 'Dividend-Price','Earnings-price','Book-Market', 'Net Equity Expansion'),
     digits = 2,
@@ -109,13 +108,17 @@ data %>%
            footnote_as_chunk = T)
 ```
 
-
-The book-to-market ratio measures the total book value (that is, company value from earnings statement) relative to the market value (on the stock market). The Net Equity Expansion measures the ratio of 12-month moving sums of net issues on the NYSE divided by the total end-of-year market cap of NYSE stocks. Earnings-price is the earnings-to-price ratio, which is the difference between the log of earnings and the log of prices. The Dividend-Price ratio is the difference between log of dividends and log of prices. \\
-
-The below figure displays the number of firms per industry represented in the dataset according to the Standard Industrial Classification (2-digit SIC). The figure only includes industries with +50 companies, as below values are deemed less relevant.
+The below figure displays the number of firms per industry represented in the dataset according to the Standard Industrial Classification (2-digit SIC). The total number of unique permnos is 7682, which is derived using code. The figure only includes industries with +50 companies, as below values are deemed less relevant.
 ```{r} 
 # Statistics of firms and industries.
-data %>% 
+n_permnos <- data %>% 
+  select(permno, sic2) %>%
+  distinct() %>%
+  group_by(sic2) %>%
+  summarise(permno_n = n()) %>%
+  summarise(sum(permno_n)) #Gives us the total number of unique permnos in the dataset
+
+nfirms <- data %>% 
   select(permno, sic2) %>%
   distinct() %>%
   group_by(sic2) %>%
@@ -129,19 +132,21 @@ data %>%
   labs(x="Industry class",
          y="Number of firms") 
   
+ggarrange(nfirms, ncol = 1) %>%
+  annotate_figure(top = text_grob("Number of firms per industry"))
+
+
 
   
 ```
 
-The below figures are illustrations of the macroeconomic variables included in the dataset. KOMMENTERING
+Moreover, the below figures are illustrations of the macroeconomic variables included in the dataset. As visible in the plot, ntis has been relatively stable over time, albeit with some fluctuation during GFC. The plot shows that book-to market ratios decline during stable economic times, the interpretation being that market values experience stronger increases than book values. During the GFC we can see large fluctuations. For ep, we can see a similar pattern where prices increase compared to earnings during good economic times, while we see a sharp drop during the GFC and Covid-19 respectively, in line with strong declines in markets. From the plot, it is also visible that companies pay dividends in line with increases in their valuation, which can be interpreted as the dividend policy being adjusted to the level of financial distress facing the company.
 
-###OLIVER OPINION: LAD OS KOMMENTERE PÅ DET VI SER MED ET PAR SÆTNINGER HER###
-###DESUDEN SKAL barplot ikke vises her nede, og vi skal have rykket headeren op i ovenstående snippet###
 ```{r,echo=FALSE, fig.align = 'center'}
 # Illustrations of macroeconomic predictors
 plot_ntis_bm = data %>% 
   select(month, macro_ntis, macro_bm) %>%
-  rename('Book-to-Market' = macro_bm,'Net Eqiuty Expansion' = macro_ntis) %>%
+  rename('Book-to-Market' = macro_bm,'Net Equity Expansion' = macro_ntis) %>%
   melt(id='month') %>%
   ggplot(aes(x=month,y=value,colour=variable, group=variable)) + 
   scale_color_manual(values = c("#CC79A7", "#009E73")) +
@@ -167,17 +172,8 @@ plot_ntis_bm = data %>%
   
   
 # We can arrange the two plots to show them together in one graph. 
-figure = ggarrange(plot_ntis_bm, plot_ep_dp, ncol = 2) %>%
+ggarrange(plot_ntis_bm, plot_ep_dp, ncol = 2) %>%
   annotate_figure(top = text_grob("Time series of macro-indicators"))
-
-
-ggarrange(barplot,   # First row with bar plot
-          figure,    # Second row with box and line plots
-          nrow = 2
-          ) %>%
-  annotate_figure(top = text_grob("Number of firms per industry"))
-
-
 
 #remove(plot_ntis_bm,plot_ep_dp)
 ```
@@ -189,8 +185,8 @@ After specifying the recipe-steps that should transform the data into something 
 
 ```{r}
 # We need sic2 to be a factor and not just a categorical variable, since this allow us to interpret the levels (values) as 0's and 1's. 
-data = data %>%
-  mutate(sic2 = as.factor(sic2))
+#data = data %>%
+ # mutate(sic2 = as.factor(sic2)) #dummy vars
 
 # Splitting, 20% of data for testing
 split <- initial_time_split(
