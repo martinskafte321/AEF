@@ -326,7 +326,7 @@ fit_lm_model <- lm_fit %>%
 rf_tune <- rf_fit %>%
   tune_grid(
     resample = data_folds,
-    grid = grid_regular( min_n(), levels =  3),   # Tuning
+    grid = grid_regular( min_n(), levels =  5),   # Tuning
     metric = "rmse"
   )
 
@@ -345,14 +345,17 @@ The below figure illustrates the effects of different hyperparameters on the pre
 ```{r fig.align = 'center', fig.width=8, fig.height=4}
 # Illustrations of effects of different hyperparameters on predictive performance. 
 
-autoplot(lm_tune, metric = "rmse") +
+en <- autoplot(lm_tune, metric = "rmse") +
   labs(y = "Root mean-squared prediction error",
        title = "RMSE for excess returns",
        subtitle = "Lasso (1.0), Ridge (0.0), and Elastic Net (0.5) with different levels of regularization.")
 
- autoplot(rf_tune, , metric = "rmse") +
+ rf <- autoplot(rf_tune, , metric = "rmse") +
   labs(y = "Root mean-squared prediction error",
        title = "RMSE for various minimal node sizes in Random Forest")
+ 
+ ggarrange(en,rf, ncol=1)
+ 
 
 remove()
 ```
@@ -395,12 +398,12 @@ rf_tune %>%
     select(-.metric,-n, -.estimator, 'rmse' = mean, 'model' = .config) %>% relocate(model) %>%
   add_column('N trees' = 50, .before = 'rmse') %>%
   #add_column('engine' = 'keras', .before = 'epochs') %>%
-  add_column('top' = 1:2, .before = 'model')  %>%
+  add_column('top' = 1:5, .before = 'model')  %>%
   kbl(caption = "Top 2 hyperparameter combinations for Neural Network", digits = 3) %>%
   kable_classic(full_width = F, html_font = "Cambria")
  
 ```
-We have created two different models by the Random Forest method. Due to restrictions on computation power it was only possible to tune one hyperparameter on three levels. The minimal amount of nodes per three was tuned, and as the table above shows, the best performing model had 21 "min_n". RMSE of 0.279 was very close to the model of 40 min_n (rmese = 0.28), and far from the one with 2 (0.299), thus assessing that the larger the value, the better the model in this case.  \\
+We have created five different Random Forest models. Due to restrictions on computation power it was only possible to tune one hyperparameter on five levels - optimally, one would tune number of trees as well. The minimal amount of nodes per tree before a split (min_n) was tuned, and as the table above shows the best performing model had a minimum of 30 giving a RMSE of 0.261. Since 21 min_n is better than 40, it's difficult to determine if a larger number is preferable. \\
 
 
 
@@ -427,7 +430,7 @@ is the best performing with a rmse of 0.24 against 1.24 for the model with 1000 
 The rmse of both models are lower in the validation set, which is an indication of two well specified models. Furthermore, the validation set is randomly picked throughout the time series, why the lower rmse has nothing to do with certain time periods being easier to predict. 
 
 
-## 5.
+### 5.
 **Use the 2 selected and fitted models to generate monthly predictions for a machine learning portfolio as described in Section 2.4.2 in Gu et al (2020) for the withheld dataset containing the most recent 20% of the observations.**
 
 We start out by taking the out-of-sample ("testing(split)") stock return prediction for our tuned elastic net and neural network models. For the convenience of the reader, we store our results in a csv-file that the reader may refer to when going through our interpretation.  
