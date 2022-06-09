@@ -1,14 +1,12 @@
 ---
 title: "Assignment 2"
-author: "Martin, Oliver and Fred"
+author: "tgx333, tfd199 and lhb642"
 date: "4/6/2022"
 output:
   html_document: default
   pdf_document: default
   
 ---
-
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 ```
@@ -43,7 +41,20 @@ tidy_finance_ML <- dbConnect(SQLite(), "Data/tidy_finance_ML.sqlite", extended_t
 
 #Selecting 5 characteristics and 4 macro variables
 characteristics <- tbl(tidy_finance_ML, "stock_characteristics_monthly") %>%
-  select(month, permno, sic2, ret_excess, mktcap_lag, characteristic_beta, characteristic_turn, characteristic_mom1m, characteristic_mom12m, characteristic_mom36m, macro_dp, macro_ep, macro_bm, macro_ntis) %>%
+  select(month, 
+         permno, 
+         sic2, 
+         ret_excess, 
+         mktcap_lag, 
+         characteristic_beta, 
+         characteristic_turn, 
+         characteristic_mom1m,   
+         characteristic_mom12m, 
+         characteristic_mom36m, 
+         macro_dp, 
+         macro_ep, 
+         macro_bm, 
+         macro_ntis) %>%
   collect() %>%
   mutate(month = as.Date(as.POSIXct.Date(month)))
 
@@ -61,15 +72,9 @@ factors_ff_monthly <- tbl(tidy_finance, "factors_ff_monthly") %>%
 dbDisconnect(tidy_finance_ML,tidy_finance)
 remove(tidy_finance_ML,tidy_finance)
 ```
-The following analysis is based on a data set with 744088 observations with different variables which describe industry and macro characteristics. In this paper, we focus on 9 variables where 5 are industry specific and 4 are macroeconomic. \
+Our first step is to remove all observations prior to January 1st 2005. The following analysis is then based on the remaining data set which consists of 744088 observations with different variables which describe industry and macro characteristics. In this paper, we focus on 9 variables where 5 are industry specific and 4 are macroeconomic. \
 
-We have chosen to work with the following five firm characteristics: beta, turn, mom1m, mom12m and mom36m. Beta is the market beta, which indicates the movement of the individual stock relative to the market. Turn is the turnover of a stock and is a measure of liquidity. Mom1m is the one month momentum, which is included to capture short-term reversal. Mom12m (12 month momentum) is brought as the general momentum measure and mom36m as a long-term reversal indicator. Bringing three momentum variables into the model might be a stretch, but these are shown (from variable importance in Gu, Kelly and Xiu (2019)) to be quite significant predictors in asset pricing.\
-
-Moreover, the following four macro indicators are included: dp, ep, bm and ntis, where dp is the dividend-price ratio, ep is the earnings-price ratio, bm is the book-to-market ratio and ntis is the net equity expansion. 
-
-### OLIVER OPINION: Skal vi ikke nævne i teksten at vi filtrere data på dato, da dette er en del af spørgsmål 1? Tænker vi kan printe nedenstående del af koden så den kommer med i PDF'en? ###
-
-```{r}
+```{r echo=TRUE}
 # Removing all observations prior to January 1st, 2005 by filtering out earlier dates. 
 data <- characteristics %>%
   filter(month >= "2005-01-01") %>%
@@ -77,6 +82,11 @@ data <- characteristics %>%
 
 remove(characteristics)
 ```
+
+We have chosen to work with the following five firm characteristics: beta, turn, mom1m, mom12m and mom36m. Beta is the market beta, which indicates the movement of the individual stock relative to the market. Turn is the turnover of a stock and is a measure of liquidity. Mom1m is the one month momentum, which is included to capture short-term reversal. Mom12m (12 month momentum) is brought as the general momentum measure and mom36m as a long-term reversal indicator. Bringing three momentum variables into the model might be a stretch, but these are shown (from variable importance in Gu, Kelly and Xiu (2019)) to be quite significant predictors in asset pricing.\
+
+Moreover, the following four macro indicators are included: dp, ep, bm and ntis, where dp is the dividend-price ratio which denotes a shares dividend as a percentage of its price, ep is the earnings-price ratio which shows a company's earnings per share relative to its price, bm is the book-to-market ratio, i.e. the value as per assets minus liabilities relative to the market value and ntis is the net equity expansion which denotes the ratio of twelve-month moving sums of net issues by listed
+stocks to total end-of-year market capitalization of same listed stocks. All variables are deemed relevant indicators when one aims at either investigating the economic outlook of firms (dp, ntis) or taking the temperature of the market, i.e. measuring how aggressively investors approach investments (ep, bm). \
 
 **Provide a brief overview of the included variables, meaningful summary statistics for the number of firms in the sample and illustrations of the macro-economic predictors in your report.** 
 
