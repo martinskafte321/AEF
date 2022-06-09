@@ -239,14 +239,11 @@ As we have already split the dataset into a training (80$\%$) and a test set (20
 
 **Implement and train two different machine learning methods discussed in the lecture to forecast excess returns as in Gu et al (2020). Provide a brief description how each of your chosen method works.** 
 
-We start by specifying the models for which we plan to test. This includes an Elastic Net (EN) model for which we tune the penalty term and mixture (between Ridge and Lasso estimation), and a Neural Network (NN), where we tune the number of epochs. Due to constraints on computing power, we have chosen not to tune any more hyperparameters on the NN, since this simple tuning procedure lasted +8 hours. 
+We implement and train an Elastic Net and a Random Forest model. In an elastic net, we specify a model where we, through tuning of hyperparameters, take decisions on the mixture between Lasso and Ridge regression. In Lasso regression, coefficients on a subset of covariates are set to zero which means that Lasso can be thought of as a variable selection method. We do not want to include all variables with possible explanatory power in the model, only variables that have a large enough effect. The Ridge draws all coefficient estimates closer to zero and can therefore be seen as penalization on regressor variance. An elastic net is a combination of these models.\
 
-In an elastic net, we specify a model where we, through tuning of hyperparameters, take decisions on the mixture between Lasso and Ridge regression. In Lasso regression, coefficients on a subset of covariates are set to zero which means that Lasso can be thought of as a variable selection method. We do not want to include all variables with possible explanatory power in the model, only variables that have a large enough effect. The Ridge draws all coefficient estimates closer to zero and can therefore be seen as penalization on regressor variance. An elastic net is a combination of these models.\
+Secondly, we consider a Random Forest (RF) model. A random forest creates many regression trees and average the predictions of the trees. A regression tree is designed to find groups of observations that behave similarly, and the tree grows further into branches, bunching data on predictor variables. A single regression tree suffers from high variance and potential overfitting, however, a Random Forest model addresses these shortcomings. In the model, we tune hyperparameters deciding the number of regression trees, trees, and the minimum amount of observations in each node, min_n. \
 
-Neural networks takes information from an input layer, through one or multiple hidden layers, to an output layer. The output layer predicts future data. In a neural network, weights are assigned to variables to determine the importance of variables in terms of output. If an output exceeds a certain threshold, it activates a node that passes data through to a next layer in the network. In a neural network, hyperparamaters that are to be tuned are the number of trees and layers, the complexity of the network. The network aims to understand patterns in the data and enables predictive modelling of future data.\
-
-Next, we set up a cross validation technique - in our case the K-fold cross-validation. The idea behind the technique consists of evaluating performance of 10 different subsets of the training data and calculating average prediction error. We split the training data into three years of data and asses this on two years. This is a general step that we will utilize for both models. 
-
+Next, we set up a cross validation technique - in our case the K-fold cross-validation. The idea behind the technique consists of evaluating performance of 10 different subsets of the training data and calculating average prediction error. We split the training data into three years of data and asses this on two years. This is a general step that we will utilize for both models.
 ```{r}
 
 # K fold cross validation for both models. 
@@ -346,13 +343,9 @@ The below figure illustrates the effects of different hyperparameters on the pre
 # Illustrations of effects of different hyperparameters on predictive performance. 
 
 en <- autoplot(lm_tune, metric = "rmse") +
-  labs(y = "Root mean-squared prediction error",
-       title = "RMSE for excess returns",
-       subtitle = "Lasso (1.0), Ridge (0.0), and Elastic Net (0.5) with different levels of regularization.")
+  labs(title = "RMSE for various Elastic Net and Random Forest models")
 
- rf <- autoplot(rf_tune, , metric = "rmse") +
-  labs(y = "Root mean-squared prediction error",
-       title = "RMSE for various minimal node sizes in Random Forest")
+ rf <- autoplot(rf_tune, , metric = "rmse")
  
  ggarrange(en,rf, ncol=1)
  
@@ -552,4 +545,4 @@ rbind(strategy_portfolio_elnet, strategy_portfolio_nn) %>%
 ```
 **Discuss your findings in a meaningful way**
 
-The results can be summarized as follows: Both the elastic net and Random Forest seem to be able to generate CAPM alpha, i.e. excess returns after adjusting for market risk. As expected, the Random Forest model appears to be the better predictor with an alpha of 0.078 exceeding that of the Elastic Net of 0.027. Moreover, the CAPM beta is estimated to be lowest for the Elastic Net, which implies that the risk profile of the portfolio is higher than that of the Random Forest. Thus, the complexity of the RF relative to the EN does result in better out-of-sample predictions. However, it is worth noting that the predicted alpha from both methods fails to show statistical significance at both the 1, 5 and 10 percent confidence level. 
+The results can be summarized as follows: Both the elastic net and Random Forest seem to be able to generate CAPM alpha, i.e. excess returns after adjusting for market risk. As expected, the Random Forest model appears to be the better predictor with an alpha of 0.081 exceeding that of the Elastic Net of 0.027. Moreover, the CAPM beta is estimated to be lowest for the Elastic Net, which implies that the risk profile of the portfolio is higher than that of the Random Forest. Thus, the complexity of the RF relative to the EN does result in better out-of-sample predictions. However, it is worth noting that the predicted alpha from both methods fails to show statistical significance at both the 1, 5 and 10 percent confidence level. 
