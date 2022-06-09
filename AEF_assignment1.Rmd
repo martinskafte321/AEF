@@ -1,14 +1,14 @@
 ---
 title: "MA 1: The Momentum Effect"
 author: "tgx333 \\ lhb642 \\ "
-date: "11/6/2022"
+date: "13/6/2022"
 output:
   html_document: default
   pdf_document: default
 ---
 
 ```{r setup, include=FALSE, warning=FALSE, echo=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 ```
 
 
@@ -39,6 +39,7 @@ library(rmgarch)
 library(xts)
 
 options(scipen=999)
+options(digits = 2) 
 ```
 
 
@@ -503,7 +504,7 @@ When a given portfolio selection is based on i.e., past year market cap momentum
 
 **Propose an alternative strategy that may be able to effectively capture the momentum premium but which at the same time delivers lower trading costs. Describe the strategy and implement it within the CRSP sample.**
 
-A portfolio that would capture a momentum effect but at the same time deliver lower trading costs, compared to the portfolio in 4, can be a portfolio with a strict no-short selling condition. Instead of buying the upper 10th quantile of momentum and selling the 1st quantile, we strictly go long in the upper 10th quantile. The idea is that this will result in a lower turnover, as assets enter and exit the portfolio less frequently. 
+A portfolio that would capture a momentum effect but at the same time deliver lower trading costs, compared to the portfolio in assigment 4, can be a portfolio with a strict no-short selling condition. Instead of buying the upper 10th quantile of momentum and selling the 1st quantile, we strictly go long in the upper 10th quantile. The idea is that this will result in a lower turnover, as assets enter and exit the portfolio less frequently. \\ 
 
 ```{r, message=FALSE}
 
@@ -524,12 +525,6 @@ momentum_original = momentum_portfolios %>%
          portfolio = case_when(portfolio <= breakpoint_low ~ "low", portfolio >= breakpoint_high ~ "high"),
          portfolio_lag = case_when(portfolio_lag <= breakpoint_low ~ "low", portfolio_lag >= breakpoint_high ~ "high"))
 
-trades_momentum_original = momentum_original %>%
-  select(permno, month, portfolio, portfolio_lag) %>%
-  mutate_all(~replace(., is.na(.), "NA")) %>%
-  mutate(traded = ifelse(portfolio==portfolio_lag, 0, 1)) %>% #counts 1 every time a stock moves between pf's 
-  ungroup() %>%
-  summarise(total_trades = sum(traded == 1))
 
 
 
@@ -543,24 +538,45 @@ momentum_new = momentum_portfolios %>%
          portfolio = case_when(portfolio >= breakpoint_high ~ "high"),
          portfolio_lag = case_when(portfolio_lag >= breakpoint_high ~ "high"))
 
-trades_momentum_new = momentum_new %>%
+# Extracting the number of tradable assets for the two portfolios per month:
+n_firms_new <- momentum_portfolios %>% filter(portfolio == 10) %>% group_by(month) %>% summarise(n_firms = n()) # Only allowed trading in the 10th decile
+n_firms_org <- momentum_portfolios %>% filter(portfolio == 10 | portfolio ==1) %>% group_by(month) %>% summarise(n_firms = n())  # Allows trading in the 1st and 10th decile
+
+
+turnover_new <- momentum_new %>%
   select(permno, month, portfolio, portfolio_lag) %>%
   mutate_all(~replace(., is.na(.), "NA")) %>%
-  mutate(traded = ifelse(portfolio==portfolio_lag, 0, 1)) %>% #counts 1 every time a stock moves between pf's 
-  ungroup() %>%
-  summarise(total_trades = sum(traded == 1)) 
+  mutate(bought = ifelse(portfolio > portfolio_lag, 1, 0),
+         sold = ifelse(portfolio < portfolio_lag, 1, 0)) %>% 
+  group_by(month) %>% 
+  summarise(bought = sum(bought), sold = sum(sold)) %>%
+  left_join(n_firms_new, by = 'month') %>%
+  mutate(turnover = pmin(bought,sold)/n_firms) %>%
+  summarise(turnover = mean(turnover))
 
-table = matrix(c(trades_momentum_original,trades_momentum_new), ncol=1)
-rownames(table) <- c('momentum_original','momentum_new')
-colnames(table) <- c('Total trades')
-table %>% kbl(caption = "Total number of trades", digits = 3) %>% 
-  kable_classic(full_width = F, html_font = "Cambria")
+turnover_org <- momentum_original %>%
+  select(permno, month, portfolio, portfolio_lag) %>%
+  mutate_all(~replace(., is.na(.), "NA")) %>%
+  mutate(bought = ifelse(portfolio > portfolio_lag, 1, 0),
+         sold = ifelse(portfolio < portfolio_lag, 1, 0)) %>% 
+  group_by(month) %>% 
+  summarise(bought = sum(bought), sold = sum(sold)) %>%
+  left_join(n_firms_org, by = 'month') %>%
+  mutate(turnover = pmin(bought,sold)/n_firms) %>%
+  summarise(turnover = mean(turnover))
+
+
+
 
 remove()
 
 ```
 
+We calculate turnover per month as: $$\frac{Minimum\ of \ assets \ bought\ or\ sold}{Average \ net\ assets }$$. This requires to first calculate the number of firms per month in the 1st and 10th decile (only 10th for the long-only portfolio) and the amount of companies bought or sold per month. Then follow the formula and one gets the turnover per month. To make things simple, we take the average turnover of each month, as the turnover ration. 
+
 **Report the resulting Sharpe-ratio and average turnover and compare to the baseline momentum strategy from exercise 4.**
+
+The table below shows that the portfolio, which doesn't short the lowest decile ends up with the highest sharpe ratio of 0.15 with the lowest turnover at 24.7\%. The portfolio, which go short the lowest decile ends up with a sharpe ratio of 0.08 and a turnover ratio of 25\%. To sum up, the best strategy seems to be without a short strategy. 
 
 ```{r, message=FALSE}
 
@@ -582,11 +598,14 @@ sharpe_new = momentum_new %>%
   transmute(sharpe = high/sd)
 
 
-table = matrix(c(sharpe_old,sharpe_new), ncol=1)
+table = matrix(c(sharpe_old,sharpe_new,turnover_org,turnover_new), ncol=2)
 rownames(table) <- c('Original portfolio','No short-portfolio')
-colnames(table) <- c('Sharpe Ratio')
-table %>% kbl(caption = "Sharpe ratio of portfolios", digits = 2) %>% 
+colnames(table) <- c('Sharpe Ratio','Turnover ratio')
+
+table %>% kbl(caption = "Sharpe ratio and turnover of portfolios", digits = 2) %>% 
   kable_classic(full_width = F, html_font = "Cambria")
+
+
 
 ```
 
