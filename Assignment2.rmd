@@ -102,7 +102,7 @@ data %>%
                        'Turnover','Momentum (1)','Momentum (12)','Momentum (36)', 'Dividend-Price','Earnings-price','Book-Market', 'Net Equity Expansion'),
     digits = 2,
     out = "return") %>%
-  kbl(caption = "Summary table of variables") %>%
+  kbl(caption = "Table 1: Summary table of variables") %>%
   kable_classic(full_width = F, html_font = "Cambria") %>%
   footnote(general = "We note the oddly similar maximum values for beta, turnover and the three momentum variables. We have checked that this is in fact not an error by us.",
            footnote_as_chunk = T)
@@ -133,12 +133,12 @@ nfirms <- data %>%
          y="Number of firms") 
   
 ggarrange(nfirms, ncol = 1) %>%
-  annotate_figure(top = text_grob("Number of firms per industry"))
+  annotate_figure(top = text_grob("Figure 1: Number of firms per industry"))
 
 remove(n_permnos,nfirms)
 ```
 
-Moreover, the below figures are illustrations of the macroeconomic variables included in the dataset. As visible in the plot, ntis has been relatively stable over time, albeit with some fluctuation during GFC. The plot shows that book-to market ratios decline during stable economic times, the interpretation being that market values experience stronger increases than book values. During the GFC we can see large fluctuations. For ep, we can see a similar pattern where prices increase compared to earnings during good economic times, while we see a sharp drop during the GFC and Covid-19 respectively, in line with strong declines in markets. From the plot, it is also visible that companies pay dividends in line with increases in their valuation, which can be interpreted as the dividend policy being adjusted to the level of financial distress facing the company.
+Moreover, the below figures are illustrations of the macroeconomic variables included in the dataset. As visible in the plot, ntis has been relatively stable over time, albeit with some fluctuation during the GFC. The plot shows that book-to market ratios decline during stable economic times, the interpretation being that market values experience stronger increases than book values. During the GFC we can see large fluctuations. For ep, we can see a similar pattern where prices increase compared to earnings during good economic times, while we see a sharp drop during the GFC and Covid-19 respectively, in line with strong declines in markets. From the plot, it is also visible that companies pay dividends in line with increases in their valuation, which can be interpreted as the dividend policy being adjusted to the level of financial distress facing the company.
 
 ```{r,echo=FALSE, fig.align = 'center'}
 # Illustrations of macroeconomic predictors
@@ -171,13 +171,13 @@ plot_ntis_bm = data %>%
   
 # We can arrange the two plots to show them together in one graph. 
 ggarrange(plot_ntis_bm, plot_ep_dp, ncol = 2) %>%
-  annotate_figure(top = text_grob("Time series of macro-indicators"))
+  annotate_figure(top = text_grob("Figure 2 & 3: Time series of macro-indicators"))
 
 remove(plot_ntis_bm,plot_ep_dp)
 ```
 **Create a recipe from tidymodels to perform two further data cleaning steps.**
 
-We create a recipe from tidymodels to perform two further cleaning steps: 1) to locate all interacting terms between the macro indicators and company characteristics, and 2) to modify the industry specific value into a dummy variable, since this format is more friendly to machine learning. \\
+We create a recipe from tidymodels to perform two further cleaning steps: 1) to locate all interacting terms between the macro indicators and company characteristics, and 2) to modify the industry specific value into a dummy variable, since this format is more friendly to machine learning. \
 
 After specifying the recipe-steps that should transform the data into something more machine learning-friendly, we can estimate a model.
 
@@ -200,7 +200,7 @@ recipe = recipe(ret_excess ~  ., data = training(newsplit)) %>% # True training 
   step_normalize(c(contains("characteristic"),contains("macro"))) %>%
   step_center(ret_excess, skip = TRUE) %>%
   step_interact(terms = ~ contains("characteristic"):contains("macro")) %>%
- # step_mutate(one_hot(as.data.table(sic2))) %>%
+  step_mutate(one_hot(as.data.table(sic2))) %>%
   step_rm(month, mktcap_lag, sic2, permno)
   
   
@@ -241,7 +241,7 @@ As we have already split the dataset into a training (80$\%$) and a test set (20
 
 We implement and train an Elastic Net and a Random Forest model. In an elastic net, we specify a model where we, through tuning of hyperparameters, take decisions on the mixture between Lasso and Ridge regression. In Lasso regression, coefficients on a subset of covariates are set to zero which means that Lasso can be thought of as a variable selection method. We do not want to include all variables with possible explanatory power in the model, only variables that have a large enough effect. The Ridge draws all coefficient estimates closer to zero and can therefore be seen as penalization on regressor variance. An elastic net is a combination of these models.\
 
-Secondly, we consider a Random Forest (RF) model. A random forest creates many regression trees and average the predictions of the trees. A regression tree is designed to find groups of observations that behave similarly, and the tree grows further into branches, bunching data on predictor variables. A single regression tree suffers from high variance and potential overfitting, however, a Random Forest model addresses these shortcomings. In the model, we tune hyperparameters deciding the number of regression trees, trees, and the minimum amount of observations in each node, min_n. \
+Secondly, we consider a Random Forest (RF) model. A random forest creates two or more regression trees and average the predictions of these. A regression tree is designed to find groups of observations that behave similarly, and the tree grows further into branches, bunching data on predictor variables. A single regression tree suffers from high variance and potential overfitting, however, a Random Forest model addresses these shortcomings. In the model, we tune hyperparameters deciding the number of regression trees, trees, and the minimum amount of observations in each node, min_n. \
 
 Next, we set up a cross validation technique - in our case the K-fold cross-validation. The idea behind the technique consists of evaluating performance of 10 different subsets of the training data and calculating average prediction error. We split the training data into three years of data and asses this on two years. This is a general step that we will utilize for both models.
 ```{r}
@@ -295,7 +295,7 @@ rf_fit <- workflow() %>%
   add_model(rf_model)
 ```
 
-The next step is to create the models. For the EN-model this includes to use cross-validation as a re-sampling technique, and a grid of 30 possible hyperparameters to tune - 10 different penalty options and three $\alpha$ mixtures. The NN is only tuned with 2 combinations of epochs, namely 10 and 1000 (we would have included more hyperparametres if computation power allowed it).
+The next step is to create the models. For the EN-model this includes to use (limited) cross-validation as a re-sampling technique, and a grid of 30 possible hyperparameters to tune - 10 different penalty options and three $\alpha$ mixtures. The Random Forest is tuned with the minimal amount of nodes per tree before a split (min_n).
 
 ```{r}
 set.seed(8745)
@@ -336,14 +336,14 @@ fit_rf_model <- rf_fit %>%
 
 **Provide a table which illustrates the set of hyperparameters and their potential values used for tuning each machine learning model similar to Table A.5 in the Online Appendix of Gu et al (2020).**
 
-The below figure illustrates the effects of different hyperparameters on the predictive performance of the models. The figure shows the development of the cross-validated prediction errors as the amount of regularization (penalization) increases. As visible in the figure, all three models show a drop in the prediction errors as the regularization increases, however, this jumps back up after a certain point. Moreover, the errors of both the Elastic Net and Lasso estimates decreases with less regularization relative to the Ridge regression. We recall that the models become more restricted as the regularization increases. Thus, we aim to choose the model which exhibits the lowest RMSE while limiting the amount of regularization. In this case, we therefore would argue for the Lasso model (blue) as it shows a faster decrease in the MSPE than the elastic net while hitting its minimum at a lower level of regularization than the Ridge model.
+The below figures illustrates the effects of different hyperparameters on the predictive performance of the models. The first figure shows the development of the cross-validated prediction errors as the amount of regularization (penalization) increases. As visible in the figure, all three models show a drop in the prediction errors as the regularization increases, however, this jumps back up after a certain point. Moreover, the errors of both the Elastic Net and Lasso estimates decreases with less regularization relative to the Ridge regression. We recall that the models become more restricted as the regularization increases. Thus, we aim to choose the model which exhibits the lowest RMSE while limiting the amount of regularization. In this case, one therefore could argue for the Lasso model (blue) as it shows a faster decrease in the MSPE than both the Elastic Net and the Ridge model while hitting its minimum at a lower level of regularization than the Ridge model, however, as visible in the figure, the decrease in the RMSE of the Ridge regression continues to decrease as regularization increases, and we therefore cannot see when the optimal level of regularization is achieved. \
 
-
+The second figure shows the development of the cross-validated prediction error of the Random Forest model as the minimal node size increases. From this we see that the RMSE decreases as the minimal node size increase, however, this spikes again after surpassing a minimal node size of 30 trees. 
 ```{r fig.align = 'center', fig.width=8, fig.height=4}
 # Illustrations of effects of different hyperparameters on predictive performance. 
 
 en <- autoplot(lm_tune, metric = "rmse") +
-  labs(title = "RMSE for various Elastic Net and Random Forest models")
+  labs(title = "Figure 4 & 5: RMSE for various Elastic Net and Random Forest models")
 
  rf <- autoplot(rf_tune, , metric = "rmse")
  
@@ -352,7 +352,7 @@ en <- autoplot(lm_tune, metric = "rmse") +
 
 remove()
 ```
-
+**Use this fitted model to generate return predictions in the validation test set and evaluate the mean squared prediction error**
 ```{r, eval = FALSE}
 
 # 4.2 Use this fitted model to generate return predictions in the validation test set and evaluate the mean squared prediction error
@@ -367,7 +367,7 @@ pred_collected_validation <- tibble(
                values_to = 'prediction')
 
 ```
-After tuning the Elastic Net (EN) and Random Forest (RF), we can extract the best performing hyperparameter combinations from the data tested on the validation set. The two best performing models are very close when comparing the rmse of the validation sample. The RF has a rmse of 0.155, while the EN-model has a loss of 0.165. 
+After tuning the Elastic Net (EN) and Random Forest (RF), we can extract the best performing hyperparameter combinations from the data tested on the validation set. The two best performing models are very close when comparing the rmse of the validation sample. The RF has a rmse of 0.154, while the EN-model has a loss of 0.165. 
 
 ```{r}
  
@@ -376,14 +376,13 @@ pred_collected_validation %>%
   yardstick::rmse(truth = actual, estimate = prediction) %>% 
   select(model, .estimate) %>%  rename('rmse' = '.estimate') %>%
   arrange(rmse) %>% 
-  kbl(caption = "Validation set prediction error", digits = 3) %>%
+  kbl(caption = "Table 2: Validation set prediction error", digits = 3) %>%
   kable_classic(full_width = F, html_font = "Cambria")
 ```
 
 **Provide some meaningful illustration of the effect of different hyperparameters on the predictive performance in the training and validation set.**
 
-
-
+We have created five different Random Forest models. Due to restrictions on computation power it was only possible to tune one hyperparameter on five levels - optimally, one would tune number of trees as well. The minimal amount of nodes per tree before a split (min_n) was tuned, and as the table above shows the best performing model had a minimum of 30 giving a RMSE of 0.261. Since 21 min_n is better than 40, it's difficult to determine if a larger number is preferable.
 ```{r}
 
 rf_tune %>%
@@ -392,14 +391,12 @@ rf_tune %>%
   add_column('N trees' = 50, .before = 'rmse') %>%
   #add_column('engine' = 'keras', .before = 'epochs') %>%
   add_column('top' = 1:5, .before = 'model')  %>%
-  kbl(caption = "Top 2 hyperparameter combinations for Neural Network", digits = 3) %>%
+  kbl(caption = "Table 3: Top 2 hyperparameter combinations for RF", digits = 3) %>%
   kable_classic(full_width = F, html_font = "Cambria")
  
 ```
-We have created five different Random Forest models. Due to restrictions on computation power it was only possible to tune one hyperparameter on five levels - optimally, one would tune number of trees as well. The minimal amount of nodes per tree before a split (min_n) was tuned, and as the table above shows the best performing model had a minimum of 30 giving a RMSE of 0.261. Since 21 min_n is better than 40, it's difficult to determine if a larger number is preferable. \\
 
-
-
+For the Elastic Net both penalty rate and mixture was tuned. The best model has a penalty of 1 and mixture of 0. It's difficult to conclude on this, since the other good models have dissimilar penalty rates and mixtures which could imply that no level in general is preferable.
 ```{r}
 
 lm_tune %>%
@@ -407,18 +404,17 @@ lm_tune %>%
   select(-.metric,-n, -.estimator, 'rmse' = mean, 'model' = .config) %>% relocate(model) %>%
   add_column('engine' = 'glmnet', .before = 'penalty') %>%
   add_column('top' = 1:10, .before = 'model') %>%
-  kbl(caption = "Top 10 hyperparameter combinations for Elastic Net model") %>%
+  kbl(caption = "Table 4: Top 10 hyperparameter combinations for Elastic Net model") %>%
   kable_classic(full_width = F, html_font = "Cambria")
 
 ```
-For the Elastic Net both penalty rate and mixture was tuned. The best model has a penalty of 1 and mixture of 0. It's difficult to conclude on this, since the other good models have dissimilar penalty rates and mixtures meaning that no level in general is preferable. 
+ 
 
 **Discuss and interpret the relation between model complexity and mean squared prediction error in training and validation set.**
 
 The complexity of a model and it's hyperparameters is best illustrated as an issue of the bias-variance trade-off, which is the relation between model complexity and flexibility. A highly complex model might have a low bias, since it's well specified, but will encounter a high variance, since the model is too complex to understand patterns in unknown data - thus it is overfitted. On the other hand a model that's too general might not capture the underlying structure in the data, which we state as being underfitted. These models will usually have a high bias and a low variance, since the model wouldn't know how to read patterns in the data, thus the predictions will be less varying. 
 
-In the case of this analysis it can be a bit difficult to discuss the complexity relationship, since the models themselves are not very complex. Usually, the neural net would be the most complex model, but in this case we only have two combinations of the model, which consists of 'epochs' of 10 and 1000. Nevertheless, it's still clear to see that the more simple model
-is the best performing with a rmse of 0.24 against 1.24 for the model with 1000 epochs. Sadly, it wasn't possible to test more models due to constraints on computing power. In the case of the Elastic Net we have more options to interpret. The best performing model is basically a Ridge-regression, since $\alpha = 0$. However, it's a bit difficult to interpret which of Lasso and Ridge is definitively performing best, since the next best model is a Lasso-regession, and on the top five-list there are three $50\%$ mixture models. Moreover, the rmse of the different models are very close to each other. Furthermore, an interpretation of the regularization values (penalties) making the top 10 list is a bit cumbersome, since there's no clear pattern. The top three consists of high (1.0, low (0.005) and -low-medium (0.07) level penalty levels. However, there seems to be a bit of overweight of low penalty values. A fairly loose conclusion is that the neural net performs best with low complexity (low amount of epochs), and the elastic net performs best with a low penalty rate and a mixture of 0 (being a Ridge-model). 
+In the case of this analysis it can be a bit difficult to discuss the complexity relationship, since the models themselves are not very complex. Usually, the Random Forest would be the most complex model, but in this case we only have five combinations of the model. Nevertheless, we still find a more complex model with 50 trees and 30 minimum nodes to be the best performing with a rmse of 0.281 against 0.292 for the model with 50 trees and 2 minimum nodes. Sadly, it wasn't possible to test more models due without suffering heavily on computing power. In the case of the Elastic Net we have more options to interpret. The best performing model is basically a Ridge-regression, since $\alpha = 0$. However, it's a bit difficult to interpret which of Lasso and Ridge is definitively performing best, since the next best model is a Lasso-regession, and on the top five-list there are three $50\%$ mixture models. Moreover, the rmse of the different models are very close to each other. Furthermore, an interpretation of the regularization values (penalties) making the top 10 list is a bit cumbersome, since there's no clear pattern. The top three consists of high (1.0, low (0.005) and -low-medium (0.07) level penalty levels. However, there seems to be a bit of overweight of low penalty values. A fairly loose conclusion is that the neural net performs best with low complexity (low amount of epochs), and the elastic net performs best with a low penalty rate and a mixture of 0 (being a Ridge-model). 
 
 The rmse of both models are lower in the validation set, which is an indication of two well specified models. Furthermore, the validation set is randomly picked throughout the time series, why the lower rmse has nothing to do with certain time periods being easier to predict. 
 
@@ -426,7 +422,7 @@ The rmse of both models are lower in the validation set, which is an indication 
 ### 5.
 **Use the 2 selected and fitted models to generate monthly predictions for a machine learning portfolio as described in Section 2.4.2 in Gu et al (2020) for the withheld dataset containing the most recent 20% of the observations.**
 
-We start out by taking the out-of-sample ("testing(split)") stock return prediction for our tuned elastic net and neural network models. For the convenience of the reader, we store our results in a csv-file that the reader may refer to when going through our interpretation.  
+We start out by taking the out-of-sample ("testing(split)") stock return prediction for our tuned elastic net and random forest models. Next, we create a function to sort the stocks into an arbitrary number of portfolios as described in chapter 4 of "Tidy Finance with R". We use the curly-curly operator to to add flexibility concerning which variable to use for the sorting. This is denoted as "var". We then use quantile() to compute breakpoints for the n number of portfolios. Lastly, we assign portfolios to each stock using the findInterval() function. The function adds a new column that contains the portfolio number to which a stock belongs. The portfolios are reconstituted each month using value weights.
 ```{r, eval = FALSE}
 # First, calculate out-of-sample predictions for both models:
 
@@ -441,13 +437,10 @@ pred_collected_testing <- tibble(
 
 ```
 
-Next, we create a function to sort the stocks into an arbitrary number of portfolios as described in chapter 4 of "Tidy Finance with R". We use the curly-curly operator to to add flexibility concerning which variable to use for the sorting. This is denoted as "var". We then use quantile() to compute breakpoints for the n number of portfolios. Lastly, we assign portfolios to each stock using the findInterval() function. The function adds a new column that contains the portfolio number to which a stock belongs. The portfolios are reconstituted each month using value weights.
-
-
 ```{r}
 # Sorting stock into deciles, using ret_excess as sorting variable
 
-# This function allows, by referencing to a dataset, a specific variable and the number of portfolios to create, to divide a dataset into portfolio sorts. It does so 
+# This function allows, by referencing to a dataset, a specific variable and the number of portfolios to create, to divide a dataset into portfolio sorts.
 
 assign_portfolio <- function(data, var, n_portfolios) {
   breakpoints <- data %>%
@@ -472,9 +465,7 @@ assign_portfolio <- function(data, var, n_portfolios) {
 
 ```
 
-We now apply the assign_portfolio function to the elastic net and neural network respectively. We sort the stocks into 10 portfolios using the momentum column in the assign_portfolios dataset and add the portfolio column to data_for_sorting.\
-
-A note for the reader: If you run this after you have tuned the model yourself and the fit is in the directory, then rename 'pred_collected_testing_copy' to 'pred_collected_testing' as this will allow you to use your own estimated values instead of the ones that we got earlier. 
+With the function, we can now apply the assign_portfolio function to the elastic net and random forest respectively. We sort the stocks into 10 portfolios using the momentum column in the assign_portfolios dataset and add the portfolio column to data_for_sorting.\
 ```{r}
 rf_portfolios = pred_collected_testing %>%
   filter(model == 'rf') %>%
