@@ -90,7 +90,40 @@ remove(table)
 ```
 **Derive a closed-form solution for the mean-variance efficient portfolio $\omega^*_{t+1}$ based on the transaction cost specification above.**
 
+We have our initial function:
+$$
+\omega^*_{t+1} := arg\ max\ \omega^{'} \mu - v_t(\omega, \omega_{t+}, \beta) - (\gamma/2)\omega^{'} \Sigma \omega 
+$$
+Subbing the formula for transaction costs, $TC(\omega,\omega_{t+})$ we get:
+$$
+\omega^*_{t+1} := arg\ max\ \omega^{'} \mu - \lambda(\omega-\omega_{t+})^{'}\Sigma(\omega-\omega_{t+})- (\gamma/2)\omega^{'} \Sigma \omega, 
+$$
+which we can rewrite:
+$$
+\omega^*_{t+1} := arg\ max\ \omega^{'} \mu - \lambda(\omega^{'}\Sigma\omega - \omega^{'}\Sigma\omega_{t+}-\omega^{'}_{t+}\Sigma\omega + \omega^{'}_{t+}\Sigma\omega_{t+}) - (\gamma/2)\omega^{'} \Sigma \omega 
+$$
+$$
+= arg\ max\ \omega^{'} \mu - \lambda(\omega^{'}\Sigma\omega - 2\omega^{'}\Sigma\omega_{t+} + \omega^{'}_{t+}\Sigma\omega_{t+}) - (\gamma/2)\omega^{'} \Sigma \omega
+$$
+$$
+= arg\ max\ \omega^{'} \mu - \lambda  \Sigma(\omega^{'}\omega - 2\omega^{'}\omega_{t+} + \omega^{'}_{t+}\omega_{t+}) - (\gamma/2)\omega^{'} \Sigma \omega. 
+$$
+As we are maximizing with respect to $\omega$ we can set the last part equal to 0, as this does not depend on $\omega$. This yields:
+$$
+\omega^*_{t+1} := arg\ max\ \omega^{'} \mu - \lambda  \Sigma(\omega^{'}\omega - 2\omega^{'}\omega_{t+}) - (\gamma/2)\omega^{'} \Sigma \omega. 
+$$
+Rewriting the above equation we get:
+$$
+\omega^*_{t+1} := arg\ max\ \omega^{'}(\mu - 2\lambda\Sigma\omega_{t+}) - (\gamma/2)\omega^{'}(\Sigma + ((2\lambda\Sigma)/\lambda))\omega
+$$
+$$
+= arg\ max\ \omega^{'}\mu^{*} - (\gamma/2)\omega^{'}\Sigma^{*}\omega
+$$
 
+where $\mu - 2\lambda\Sigma\omega_{t+} = \mu^{*}$ and $\Sigma + ((2\lambda\Sigma)/\lambda) = \Sigma^{*}$. As this is on the same form as the maximization problem without transaction costs, we find the following solution:
+$$
+\omega^*_{t+1} = (1/\gamma)(\Sigma^{*-1}-(1/(i'\Sigma^{*-1}i))\Sigma^{*-1}ii'\Sigma^{*-1})\mu^{*}+(1/(i'\Sigma^{*-1}i))\Sigma^{*-1}i
+$$
 **Discuss if the assumption of transaction costs proportional to volatility makes sense.**
 
 To find the optimal weight we incorporate the 'compute_efficient_weights' function from chapter 11.4 in (Scheuss et. al 2022), where $\mu$ denotes the historical mean return, sigma, $\Sigma$ is the covariance matrix, gamma, $\gamma$, is the coefficient of risk aversion (4 by pre-specification), lambda, $\lambda$ is the transaction costs and w_prev is the weight before re-balancing. The function calculates the efficient portfolio weight in general form, while allowing for transaction costs. The transaction costs are conditional on the holdings before reallocation. The figure shows that if lambda (tr. cost) is zero, the portfolio allocation resembles the standard mean-variance efficient framework, where the aim is to maximize the sharpe ratio.\\ 
