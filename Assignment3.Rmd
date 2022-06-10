@@ -59,7 +59,7 @@ data <- crsp_monthly %>%
   filter(n == max(n)) %>%
   select(-n)
 
-remove(crsp_monthly)
+remove(crsp_monthly, tidy_finance)
 ```
 
 **Provide a brief summary of the sample: How many stocks does your investment universe consist of?**
@@ -116,14 +116,21 @@ Rewriting the above equation we get:
 $$
 \omega^*_{t+1} := arg\ max\ \omega^{'}(\mu - 2\lambda\Sigma\omega_{t+}) - (\gamma/2)\omega^{'}(\Sigma + ((2\lambda\Sigma)/\lambda))\omega
 $$
+
+where we replace $\bar\mu$ with $\mu + 2\lambda\Sigma\omega_{t+}$ and $\bar\Sigma$ with $\Sigma + (2\lambda\Sigma/\lambda) $ to get the following expression: 
 $$
 = arg\ max\ \omega^{'}\mu^{*} - (\gamma/2)\omega^{'}\Sigma^{*}\omega
 $$
 
-where $\mu - 2\lambda\Sigma\omega_{t+} = \mu^{*}$ and $\Sigma + ((2\lambda\Sigma)/\lambda) = \Sigma^{*}$. As this is on the same form as the maximization problem without transaction costs, we find the following solution:
+As this is on the same form as the maximization problem without transaction costs, we find the following solution:
 $$
 \omega^*_{t+1} = (1/\gamma)(\Sigma^{*-1}-(1/(i'\Sigma^{*-1}i))\Sigma^{*-1}ii'\Sigma^{*-1})\mu^{*}+(1/(i'\Sigma^{*-1}i))\Sigma^{*-1}i
 $$
+
+
+
+
+
 **Discuss if the assumption of transaction costs proportional to volatility makes sense.**
 
 To find the optimal weight we incorporate the 'compute_efficient_weights' function from chapter 11.4 in (Scheuch et. al 2022), where $\mu$ denotes the historical mean return, sigma, $\Sigma$ is the covariance matrix, gamma, $\gamma$, is the coefficient of risk aversion (4 by pre-specification), lambda, $\lambda$ is the transaction costs and w_prev is the weight before re-balancing. The function calculates the efficient portfolio weight in general form, while allowing for transaction costs. The transaction costs are conditional on the holdings before reallocation. The figure shows that if lambda (tr. cost) is zero, the portfolio allocation resembles the standard mean-variance efficient framework, where the aim is to maximize the sharpe ratio. As transactions costs grow larger, the optimal weights of the portfolio will go farther away from efficient portfolio. \
@@ -131,28 +138,29 @@ To find the optimal weight we incorporate the 'compute_efficient_weights' functi
 Considering a mean variance allocation strategy the assumption of transaction costs proportional to volatility is quiet realistic, since higher volatility requires the investor to rebalance more often. In a high volatility environment, the assumption of daily rebalancing is less realistic though, since the investor would know that the transaction costs would be large relative to the expected profit. The less frequency of rebalancing the less importance volatility will have on the profits. E.g. an investor who rebalances monthly would care less about the volatility than one who rebalances daily, since the probability of the stock returning to the starting value is larger on a monthly basis.  
 
 ```{r}
+
 # Function to compute optimal portfolio weights based on inputs. 
 
-efficient_weights <- function(mu, sigma, gamma = 4, lambda, w_prev) {
+efficient_weights <- function(mu, sigma, gamma = 4, lambda = 0, 
+                              w_prev =1/ncol(sigma) * rep(1, ncol(sigma))) {
   
   iota <- rep(1, ncol(sigma))
+  sigma_adj <- sigma + (2 * lambda * sigma)/ gamma  #diag(ncol(Sigma))
+  mu_adj <- mu + lambda * sigma * 2 * w_prev
   
-  sigma_adjusted <- sigma + lambda/gamma * diag(ncol(sigma))
-  mu_adjusted <- mu + lambda*w_prev
-  
-  sigma_inv <- solve(sigma_adjusted)
+  sigma_inv <- solve(sigma_adj)
   
   w_mvp <- sigma_inv %*% iota
   w_mvp <- as.vector(w_mvp / sum(w_mvp))
   
-  w_opt <- w_mvp + 1/gamma*(sigma_inv - (sigma_inv %*% iota %*% t(iota) %*% sigma_inv)/sum(sigma_inv)) %*% mu_adjusted
+  w_opt <- w_mvp  + 1/gamma * (sigma_inv - 1 / sum(sigma_inv) * sigma_inv %*% iota %*% t(iota) %*% sigma_inv) %*% mu_adj
   return(as.vector(w_opt))
 }
 
 ```
 
 
-The first step is to calculate the returns matrix, where the entire series of returns for each stock is obtained. From this it is possible to calculate the historical mean, $\mu$ and covariance matrix, $\Sigma$.
+The first step is to calculate the returns matrix, where the entire series of returns for each stock is obtained. From this it is possible to calculate the historical mean, $\mu$ and covariance matrix, $\Sigma$. 
 ```{r}
 # We will need a a (T x N) matrix of returns to compute a matrix of returns: 
 ret_matrix <- data %>%
@@ -164,15 +172,64 @@ ret_matrix <- data %>%
   select(-month)
 
 
-# using the returns matrix, we can compute the covariance matrix 
+
+
+# using the returns matrix, we can compute the covariance matrix and sample mean
 sigma <- cov(ret_matrix)
-mu <- colMeans(ret_matrix) # extract the sample mean returns from the return matrix
+mu <- colMeans(ret_matrix)
+
+# Calculating the minimum variance weights
+w_mvp <- solve(sigma) %*% rep(1, ncol(sigma))
+w_mvp <- as.vector(w_mvp / sum(w_mvp)) 
+
+# Creating the initial naive weight
+naive_weights = 1/ncol(sigma) * rep(1,ncol(sigma))
 
 remove(data)
 
 ```
 
-Next we perform Ledoit-Wolf shrinkage on the variance-covariance matrix. This comes in handy, as the method serves as an effective way of overcoming issues related to var-covar matrices in large dimensions. The function is rather complex, why we refer the reader to chapter 9.2 in "Exercises for Advanced Empirical Finance: Topics and Data Science" by (Scheuss et. al 2022) for a deeper explanation.
+
+To calculate the optimal portfolio with 1/N initial we will use the hard-coded weight parameter from the function, as this provides an initially equally-weighted portfolio. \ 
+
+```{r, fig.width=8, fig.height=4}
+
+# Calculating the efficient portfolio weights that we use to compare with:
+w_efficient = efficient_weights(sigma = sigma,
+                                   mu = mu)
+
+
+# Calculating the portfolio weights adjusted for transactions cost
+transactions_costs <- expand_grid(lambda = 20 * qexp((1:99)/100)) %>%
+  mutate(weights = map(.x = lambda,
+                       ~efficient_weights(
+                         sigma = sigma,
+                         mu = mu,
+                         lambda = .x / 10000,
+                         w_prev = w_mvp
+                         
+                       )
+                       ),
+         concentration = map_dbl(weights, ~sum(abs(. - w_efficient)))
+         )
+
+transactions_costs %>% 
+  ggplot(aes(x = lambda, y = concentration)) + 
+  geom_line(color="tomato3") +
+  scale_x_sqrt()
+  labs(x = "Transaction cost parameter", 
+       y = "Distance from efficient weights",
+       title = "Distance from efficient portfolio weights for different transaction cost")
+
+remove(transactions_costs, mu, sigma)
+
+```
+
+
+The higher the level of transaction costs, the closer will the optimal portfolio will be to the equally-weighted. Turnover penalization will make the investor reluctant towards making trades, as it is costly, and therefore choose appropriate portfolio-weights. This also makes sense as increasing transaction costs implies a higher demanded return - at some point, the costs just will not outweight the gains from the transactions, why investors will be reluctant to rebalance their portfolio. 
+
+
+Next we perform Ledoit-Wolf shrinkage on the variance-covariance matrix. This comes in handy, as the method serves as an effective way of overcoming issues related to var-covar matrices in large dimensions. The method is argued to systematically reduce estimation error in the variance-covariance matrix, as it pulls the most extreme coefficients towards more central values.
 ```{r}
 # Ledoit-Wolf estimation
 compute_ledoit_wolf <- function(x) {
@@ -221,44 +278,6 @@ compute_ledoit_wolf <- function(x) {
 
 
 ```
-
-To calculate the optimal portfolio with 1/N initial we will use the hard-coded weight parameter from the function, as this provides an initially equally-weighted portfolio. \ 
-
-```{r, fig.width=8, fig.height=4}
-# Creating the initial naive weight
-naive_weights = 1/ncol(sigma) * rep(1,ncol(sigma))
-
-w_efficient = efficient_weights(sigma = sigma,
-                                   mu = mu,
-                                   lambda = 0,
-                                   w_prev = naive_weights)
-
-transactions_costs <- expand_grid(lambda = 20 * qexp((1:99)/100)) %>%
-  mutate(weights = map(.x = lambda,
-                       ~efficient_weights(
-                         sigma = sigma,
-                         mu = mu,
-                         lambda = .x / 10000,
-                         w_prev = naive_weights
-                         
-                       )
-                       ),
-         concentration = map_dbl(weights, ~sum(abs(. - w_efficient)))
-         )
-
-transactions_costs %>% 
-  ggplot(aes(x = lambda, y = concentration)) + 
-  geom_line(color="tomato3") +
-  labs(x = "Transaction cost parameter", 
-       y = "Distance from efficient weights",
-       title = "Distance from efficient portfolio weights for different transaction cost")
-
-remove(transactions_costs, mu, sigma)
-
-```
-
-
-The higher the level of transaction costs, the closer will the optimal portfolio will be to the equally-weighted. Turnover penalization will make the investor reluctant towards making trades, as it is costly, and therefore choose appropriate portfolio-weights. This also makes sense as increasing transaction costs implies a higher demanded return - at some point, the costs just will not outweight the gains from the transactions, why investors will be reluctant to rebalance their portfolio. 
 
 
  
