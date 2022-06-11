@@ -105,13 +105,26 @@ for (m in 1:nrow(unique(data['permno']))) {
 sigma <- cov(ret_matrix)
 mu <- colMeans(ret_matrix)
 
-# Tables on mu and sigma:
-t(mu) %>% kbl(caption = "Table 2: Model-implied expected gross excess returns",digits = 4) %>%
-  kable_classic(full_width = F, html_font = "Cambria")
+```
 
+```{r}
+#Prepping dataframe for table generation
+mu_tbl <- data.frame(t(mu)) 
+names(mu_tbl) = substring(names(mu_tbl), 2)
+mu_tbl['Permno'] <- 'Mu'
+mu_tbl <- mu_tbl[ , c("Permno",    # Reorder data frame
+                       names(mu_tbl)[names(mu_tbl) != "Permno"])]
+
+mu_tbl %>% kbl(caption = "Table 2: Model-implied expected gross excess returns",digits = 4) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+```{r}
 t(sigma) %>% kbl(caption = "Table 3: Model-implied variance-covariance matrix",digits = 4) %>%
   kable_classic(full_width = F, html_font = "Cambria")
 ```
+
+
 
 *What determines the correlation of the returns?*
 In our model, all predictors (market excess, smb and hml returns) have the same value throughout the series across all permnos. Therefore, the only thing that determines the estimated excess returns, and thus the only thing that makes the estimated returns differ, are the weights assigned to each variable, i.e. the coefficients. Adding to this, the betas themselves are determined using OLS, where the aim is to fit the regression by minimizing the squared errors, i.e. the sum of the square differences between the observed and predicted values. Therefore, the beta value of a given firm depends on the performance of the firm's stock relative to the performance of all other stocks.
@@ -243,6 +256,13 @@ optimal_theta <- optim(
   data = data
 )
 
-optimal_theta$par
+opt_theta <- optimal_theta$par
+```
+
+```{r}
+processed_data <- compute_portfolio_weights(
+    theta = opt_theta,
+    data = data
+  )
 ```
 
