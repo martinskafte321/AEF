@@ -176,8 +176,8 @@ data = data %>%
   )
 
 n_parameters <- 3
-theta <- rep(1.5, 3)
-names(theta) <- colnames(c("beta","size","bm"))
+theta <- rep(1.5, n_parameters)
+names(theta) <- c("size","bm","beta")
 
 ```
 
@@ -250,19 +250,29 @@ compute_objective_function <- function(theta,
 }
 
 optimal_theta <- optim(
-  par = rep(1.5, 3), 
+  par = theta, 
   compute_objective_function,
   objective_measure = "Certainty equivalent",
   data = data
 )
 
 opt_theta <- optimal_theta$par
+
+t(opt_theta) %>% kbl(caption = "Table 4: Optimal estimates of theta", digits = 3, col.names = c('Size', 'bm', 'beta')) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+
 ```
 
+In Table 4, the visible coefficients are the relative deviations from the benchmark naive portfolio due to characteristics market capitalization, book-to-market ratio and CAPM beta. These values optimize the objective function of maximizing the investors certainty equivalent. The values imply that expected utility for the investor decreases with size and beta, while it increases with bm. In other words, weight is assigned towards smaller companies, companies with lower book-to-market ratios and companies which stock move against the market. This is in line with past literature and findings in XXX, that focus is to be put on smaller companies and companies with lower book-to-market ratios.
+
 ```{r}
-processed_data <- compute_portfolio_weights(
+optimal_weights <- compute_portfolio_weights(
     theta = opt_theta,
     data = data
-  )
+  ) %>% group_by(permno) %>% filter(month == max(month)) %>% select(weight_tilt) 
+
+optimal_weights %>% pivot_wider(names_from = permno, values_from = weight_tilt) %>% kbl(caption = "Table 5: Optimal weights in the last period based on theta and stock characteristics", digits = 3) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
 ```
 
