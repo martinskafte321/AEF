@@ -37,7 +37,9 @@ library(rmgarch)
 library(xts)
 ```
 
-##1.
+###1.
+
+**Provide a brief summary of the sample: How many stocks does your investment universe consist of?**
 
 We start by loading the CRSP data set. To keep the analysis simple we work with a balanced panel and exclude tickers, that are not traded for the full period. We end up with a tradable universe of 731 stocks.  
 ```{r}
@@ -62,7 +64,7 @@ data <- crsp_monthly %>%
 remove(crsp_monthly, tidy_finance)
 ```
 
-**Provide a brief summary of the sample: How many stocks does your investment universe consist of?**
+
 
 We now turn to produce the summary statistics. In conclusion, we are working with a dataset consisting of 107 stocks running for 731 months between February 1st 1960 and December 1st 2020. Moreover, some statistics about the annualized excess returns are provided, all in percent. 
 ```{r, fig.align = 'center'}
@@ -137,30 +139,35 @@ To find the optimal weight we incorporate the 'compute_efficient_weights' functi
 
 Considering a mean variance allocation strategy the assumption of transaction costs proportional to volatility is quiet realistic, since higher volatility requires the investor to rebalance more often. In a high volatility environment, the assumption of daily rebalancing is less realistic though, since the investor would know that the transaction costs would be large relative to the expected profit. The less frequency of rebalancing the less importance volatility will have on the profits. E.g. an investor who rebalances monthly would care less about the volatility than one who rebalances daily, since the probability of the stock returning to the starting value is larger on a monthly basis.  
 
-```{r}
+**Write a function that computes the optimal weights, $\omega^{*}_{t+1}$ based on the inputs $\mu, \Sigma, \gamma, \lambda$ and the current weights $\omega_{t+}$. You can assume $\gamma$ = 4 throughout the entire assignment.**
 
-# Function to compute optimal portfolio weights based on inputs. 
+The following code chunck shows a function that computes the optimal weights:
 
+```{r, echo=TRUE}
+
+# Function to compute optimal portfolio weights:
 efficient_weights <- function(mu, sigma, gamma = 4, lambda = 0, 
-                              w_prev =1/ncol(sigma) * rep(1, ncol(sigma))) {
+                              w_prev) {
   
   iota <- rep(1, ncol(sigma))
-  sigma_adj <- sigma + (2 * lambda * sigma)/ gamma  #diag(ncol(Sigma))
-  mu_adj <- mu + lambda * sigma * 2 * w_prev
+  sigma_adj <- sigma + (2 * lambda * sigma)/gamma
+  mu_adj <- mu + 2*lambda * sigma %*%  naive_weights
+ 
   
   sigma_inv <- solve(sigma_adj)
   
   w_mvp <- sigma_inv %*% iota
   w_mvp <- as.vector(w_mvp / sum(w_mvp))
   
-  w_opt <- w_mvp  + 1/gamma * (sigma_inv - 1 / sum(sigma_inv) * sigma_inv %*% iota %*% t(iota) %*% sigma_inv) %*% mu_adj
+  w_opt <- w_mvp + 1/gamma * (sigma_inv - 1 / sum(sigma_inv) * sigma_inv %*% iota %*% t(iota) %*% sigma_inv) %*% mu_adj
+  
   return(as.vector(w_opt))
 }
 
 ```
+**Use the full sample of your data to compute sample mean returns and the sample variance covariance matrix.**
 
-
-The first step is to calculate the returns matrix, where the entire series of returns for each stock is obtained. From this it is possible to calculate the historical mean, $\mu$ and covariance matrix, $\Sigma$. 
+The first step is to calculate the returns matrix, where the entire series of returns for each stock is obtained. From this it is possible to calculate the historical mean, $\mu$ and covariance matrix, $\Sigma$. Next we calculate the minimum variance portfolio weights, which we use as the initial weights of the portfolios. 
 ```{r}
 # We will need a a (T x N) matrix of returns to compute a matrix of returns: 
 ret_matrix <- data %>%
@@ -170,7 +177,6 @@ ret_matrix <- data %>%
     values_from = ret_excess
   ) %>% 
   select(-month)
-
 
 
 
@@ -190,13 +196,16 @@ remove(data)
 ```
 
 
-To calculate the optimal portfolio with 1/N initial we will use the hard-coded weight parameter from the function, as this provides an initially equally-weighted portfolio. \ 
+**Compute the optimal portfolio $\omega^{*}_{t+1}(\lambda)$ for different values of the transaction cost parameter $\lambda$. Illustrate the distance $\Sigma^{N}_{j=1} | \omega^{*}_{i,t+1}(\lambda)-w_{i, \lambda=4}(\mu, \Sigma)  |$ where $w_{i, \lambda=4}(\mu, \Sigma)$ is the efficient portfolio with risk aversion $\lambda$ = 4. What do you conclude about the effect of turnover penalization?**
+
+To calculate the optimal portfolio with 1/N initial we will use the hard-coded weight parameter from the function, as this provides an initially equally-weighted portfolio. \
 
 ```{r, fig.width=8, fig.height=4}
 
 # Calculating the efficient portfolio weights that we use to compare with:
 w_efficient = efficient_weights(sigma = sigma,
-                                   mu = mu)
+                                   mu = mu
+                                )
 
 
 # Calculating the portfolio weights adjusted for transactions cost
@@ -206,8 +215,7 @@ transactions_costs <- expand_grid(lambda = 20 * qexp((1:99)/100)) %>%
                          sigma = sigma,
                          mu = mu,
                          lambda = .x / 10000,
-                         w_prev = w_mvp
-                         
+                         w_prev = naive_weights
                        )
                        ),
          concentration = map_dbl(weights, ~sum(abs(. - w_efficient)))
@@ -216,7 +224,7 @@ transactions_costs <- expand_grid(lambda = 20 * qexp((1:99)/100)) %>%
 transactions_costs %>% 
   ggplot(aes(x = lambda, y = concentration)) + 
   geom_line(color="tomato3") +
-  scale_x_sqrt()
+  scale_x_sqrt()+
   labs(x = "Transaction cost parameter", 
        y = "Distance from efficient weights",
        title = "Distance from efficient portfolio weights for different transaction cost")
@@ -225,10 +233,15 @@ remove(transactions_costs, mu, sigma)
 
 ```
 
+**What do you conclude about the effect of turnover penalization?** 
 
 The higher the level of transaction costs, the closer will the optimal portfolio will be to the equally-weighted. Turnover penalization will make the investor reluctant towards making trades, as it is costly, and therefore choose appropriate portfolio-weights. This also makes sense as increasing transaction costs implies a higher demanded return - at some point, the costs just will not outweight the gains from the transactions, why investors will be reluctant to rebalance their portfolio. 
 
+### 3.
 
+**Implement a full-fledged portfolio backtesting strategy. Briefly describe your chosen model, the forecasting procedure and discuss the effects on the out-of-sample portfolio performance.**
+
+For the implementation we perform Ledoit-Wolf shrinkage on the variance-covariance matrix. This comes in handy, as the method serves as an effective way of overcoming issues related to var-covar matrices in large dimensions. The method is argued to systematically reduce estimation error in the variance-covariance matrix, as it pulls the most extreme coefficients towards more central values.\
 Next we perform Ledoit-Wolf shrinkage on the variance-covariance matrix. This comes in handy, as the method serves as an effective way of overcoming issues related to var-covar matrices in large dimensions. The method is argued to systematically reduce estimation error in the variance-covariance matrix, as it pulls the most extreme coefficients towards more central values.
 ```{r}
 # Ledoit-Wolf estimation
@@ -280,16 +293,17 @@ compute_ledoit_wolf <- function(x) {
 ```
 
 
- 
-
-With rolling window forecasts, we recursively re-estimate the model and store the one ahead covariance forecasts. We implement the strategy in the following way. For the backtesting, we recompute optimal weight based purely on past available data. We use a window length of 150 periods which gives us 333 periods of performance. We test three strategies: A transaction cost-adjusted portfolio (MV (TC)), a mean-variance portfolio without short-selling, but with transaction costs (MV (No SS)) and an equally weighted naive portfolio (Naive). Initial weights are set as a equally weighted portfolio and we evaluate the portfolios through the mean returns nets of transaction costs, std. deviation of returns net of transaction costs, the sharpe ratio and the portfolio turnover.    
+With rolling window forecasts, we recursively re-estimate the model and store the one ahead covariance forecasts. We implement the strategy in the following way. For the backtesting, we recompute optimal weight based purely on past available data. We use a window length of 150 periods which gives us 333 periods of performance. We test three strategies: A transaction cost-adjusted portfolio (MV (TC)), a mean-variance portfolio without short-selling, but with transaction costs (MV (No SS)) and an equally weighted naive portfolio (Naive). Initial weights are set as an equally weighted portfolio and we evaluate the portfolios through the mean returns nets of transaction costs, std. deviation of returns net of transaction costs, the sharpe ratio and the portfolio turnover.    
 
 ```{r}
-# recomputing optimal weights
+# This chunk contains all the necessary functions and variables that we need in the estimation in below chunk.
 
-window_length <- 150
-periods <-  nrow(ret_matrix) - window_length
-lambda = 200/10000
+# recomputing optimal weights by a specific window of data for every point forecast:
+window_length <- 150 # 150 datapoints in each window to calculate estimates:
+periods <-  nrow(ret_matrix) - window_length # 581 periods forecast
+lambda = 200/10000 # 2% transaction cost
+
+
 
 performance_values <- matrix(NA,
                              nrow = periods,
@@ -297,12 +311,13 @@ performance_values <- matrix(NA,
 
 colnames(performance_values) = c("raw_return","turnover","net_return")
 
-
+# Creates the list, which we populate with the values calculated later:
 performance_values <- list("MV (TC)" = performance_values,
                            "MV (No SS)" = performance_values, 
                             "Naive" = performance_values)
 
 w_prev_1 <- w_prev_2 <- w_prev_3 <- naive_weights # Initial weights of all portfolios
+
 
 # Helper function to adjust weights due to returns changing
 adjust_weights <- function(w, next_return){
@@ -320,33 +335,37 @@ evaluate_performance <- function(w, w_previous, next_return, lambda){
 
 ```
 
-With the helper functions, we are ready to perform the rolling-window estimation. This is done using a for loop through all the periods. Lastly, the performance is evaluated through the summarized key figures.
-```{r}
-# The following code chunk performs rolling-window estimation:
+We include two helper functions. The first one adjusts the weights given changes in the underlying returns. The second calculates the performance evaluations by computing the realized returns af transaction costs have been deducted. With the helper functions, we are ready to perform the rolling-window estimation. This is done using a for loop through all the periods. Lastly, the performance is evaluated through the summarized key figures.
 
+```{r}
+
+# The following code chunk performs rolling-window estimation of all three portfolio strategies:
 for (p in 1:periods) {
   
-  returns_window <- ret_matrix[p : (p + window_length - 1), ] # window of return rows. window of rows and all columns
+  
+  # Below variables are general for all three estimation methods:
+  returns_window <- ret_matrix[p : (p + window_length - 1), ] # window of return rows for different companies:
   one_ahead_return <- ret_matrix[p + window_length,] # Next periods return
   
 
   mu  <- colMeans(returns_window)
   sigma_lw <- compute_ledoit_wolf(returns_window)
   
+  
+  
   # Mean-variance transaction cost-adjusted portfolio:
-
   w_MV_TC <- efficient_weights(mu = mu,
                                     sigma = sigma_lw,
                                     lambda = lambda,
-                                    w_prev = w_prev_1 # first naive, then adjusted.
+                                    w_prev = w_prev_1 # first period weights are naive, then adjusted to returns in the following
                                     )
-  
-  performance_values[[1]][p,] <- evaluate_performance(w = w_MV_TC,
-                                                      w_previous = w_prev_1,
-                                                      next_return = one_ahead_return,
+  # Store the weights in a table and calculate returns:
+  performance_values[[1]][p,] <- evaluate_performance(w = w_MV_TC, # estimated weights of this period
+                                                      w_previous = w_prev_1, # estimated weights of last period
+                                                      next_return = one_ahead_return, 
                                                       lambda = lambda
                                                       )
-  
+  # Weights to be used in the next period
   w_prev_1 = adjust_weights(w_MV_TC, one_ahead_return)
   
 
@@ -395,9 +414,10 @@ performance %>%
   kable_classic(full_width = F, html_font = "Cambria")
 ```
 
-
+**Which portfolio strategy performed best after adjusting for transaction costs and what are possible reasons for the differences in performance? **
 As presented in the above table, the best performing strategy is the naive portfolio, where we rebalance to an equally weighted portfolio in each period. Using this strategy, we are able to generate a mean return of 9.83% which is significantly better than both of the other strategies. Moreover, the sharpe ratio suggest that the naive portfolio handles risk more efficiently than both of the other portfolios. It also becomes evident that transaction costs tend to kill returns, as both the naive and the portfolio with no short-selling strongly outperforms the transaction cost-adjusted portfolio. We thus see a negative correlation between turnover and returns, which underlines the importance of accounting for transaction costs when building a trading strategy. 
 
+**would you consider the backtesting results as a “true” out-of-sample experiment? Why? Why not?**
 
 An argument for the out-of-sample experiment being "true" is that the observations used to estimate sigma (i.e., the training data) are not the one's used for the prediction. Thus, the forecast is made using a set of un-used observations, which, by definition, makes it an out-of-sample experiment. However, the experiments aim of testing how transaction costs affects the performance by rebalancing ex ante is made using some relatively unrealistic assumptions on the structure of transaction costs as we use a standardized cost of 200 bps for all transactions. As this does not reflect the true cost structure in the market, one could argue that the results fail to present a real representation of the effect of transaction costs. 
 
