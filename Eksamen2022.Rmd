@@ -34,6 +34,8 @@ library(keras)
 library(quadprog)
 library(rmgarch)
 library(xts)
+
+options(scipen=999)
 ```
 
 
@@ -99,10 +101,11 @@ for (m in 1:nrow(unique(data['permno']))) {
 }
  
 # using the returns matrix, we can compute the covariance matrix and sample mean
+
 sigma <- cov(ret_matrix)
 mu <- colMeans(ret_matrix)
 
-
+# Tables on mu and sigma:
 t(mu) %>% kbl(caption = "Table 2: Model-implied expected gross excess returns",digits = 4) %>%
   kable_classic(full_width = F, html_font = "Cambria")
 
@@ -114,7 +117,7 @@ t(sigma) %>% kbl(caption = "Table 3: Model-implied variance-covariance matrix",d
 In our model, all predictors (market excess, smb and hml returns) have the same value throughout the series across all permnos. Therefore, the only thing that determines the estimated excess returns, and thus the only thing that makes the estimated returns differ, are the weights assigned to each variable, i.e. the coefficients. Adding to this, the betas themselves are determined using OLS, where the aim is to fit the regression by minimizing the squared errors, i.e. the sum of the square differences between the observed and predicted values. Therefore, the beta value of a given firm depends on the performance of the firm's stock relative to the performance of all other stocks.
 
 
-##1.3
+### 1.3
 **Use your parameter estimates to report the computed implied mean-variance efficient portfolio weight for an investor with risk aversion $\gamma$ = 4**
 ```{r}
 # Function to compute optimal portfolio weights:
@@ -122,7 +125,7 @@ efficient_weights <- function(mu, sigma, gamma = 4) {
   
   iota <- rep(1, ncol(sigma))
  
-  sigma_inv <- solve(sigma, tol = 1e-20) 
+  sigma_inv <- solve(sigma)
   
   w_mvp <- sigma_inv %*% iota
   w_mvp <- as.vector(w_mvp / sum(w_mvp))
@@ -135,6 +138,111 @@ efficient_weights <- function(mu, sigma, gamma = 4) {
 w_efficient = efficient_weights(sigma = sigma,
                                    mu = mu
                                 )
-sum(w_efficient)
+```
+### 2.1
+**Briefly describe the method: What is the intuition behind the parameter vector $\theta$ and how do Brandt, Santa-Clara and Valkanov propose to estimate $\theta$?**
+The authors model the portfolio weights of each asset as a function of the assets characteristics. The coefficients of this function are found by optimizing the investor’s average utility of the portfolio’s return over the sample period. The optimal weight in each stock is found by taking the sum of its market capitalization weight and an optimal deviation from that market cap weight which depends parametrically on the characteristics of the firms. The included characteristics are market cap, book-to-market ratio, lagged one-year returns of each firm. Moreover, investors are assumed to have constant relative risk aversion preferences. \
+
+The method implies that the coefficients $\theta$ are held constant across assets over the entire time period. This implies that the portfolio weights depends solely on the characteristics and not its historic returns. Therefore, two stocks with similar characteristics associated with returns and risk should have similar weights even though their sample returns may differ. It is implicitly assumed that the aforementioned characteristics fully capture all aspects of the joint distribution of returns that are deemed relevant for building an optimal portfolio. This implies that the coefficients that maximizes the conditional expected utility of the investor at a given point in time are the same for all dates. Therefore, they also maximize the unconditional utility of the investors. \ 
+
+\textbf{Estimating $\thea$:} In the paper, the coefficients, i.e. the maximum expected utility estimator, are estimated as a method of moments estimator from which the asymptotic covariance matrix can be estimated using the consistent estimator V. This approach allows the authors to test the model for certain problems, e.g. misspecified portfolio policy or with the implementation of different constraints which is allowed as long as the authors take the appropriate measures to estimate V (e.g., by using an autocorrelation-adjusted estimator of V when constraints are imposed). 
+
+### 2.2
+**Discuss the benefit of the parametrizing portfolio weights directly relative to the two-step procedure. What are potential disadvantages of direct weight parametrization?**
+The authors argues that their method is beneficial for different reasons. It is computationally simple, easily modified and extended, produces sensible portfolio weights, and offers robust performance in and out of sample. Moreover, it is argued that parameterization leads to a tremendous reduction in dimensionality, and it escapes issues with imprecise coefficient estimates and overfitting. \
+
+A disadvantage of the approach is the fact that characteristics are chosen arbitrarily, why one easily can assume that some information is not accounted for. Another disadvantage is that constraints on the portfolio weights (e.g. no-short selling constraints) implies that more complicated measures have to be implemented, as the weights will not automatically sum to one. Moreover, the critical assumptions regarding the characteristics fully capturing all aspects of the joint return distribution and the fact that coefficients are held constant for the entire period is somewhat unrealistic. As the authors write themselves: "While this is a convenient assumption, there is no obvious economic reason for the relation between firm characteristics and the joint distribution of returns to be time-invariant. In fact, there is substantial evidence that economic variables related to the business cycle forecast aggregate stock and bond returns".
+
+### 2.3
+
+```{r}
+data = data %>%
+  group_by(month) %>%
+  mutate(
+    n = n(),
+  )
+
+n_parameters <- 3
+theta <- rep(1.5, 3)
+names(theta) <- colnames(c("beta","size","bm"))
+
+```
+
+```{r}
+evaluate_portfolio <- function(weights_crsp, gamma = 4) {
+  
+  evaluation <- weights_crsp %>%
+    group_by(month) %>%
+    summarize(
+      return_tilt = weighted.mean(ret_excess, weight_tilt),
+      return_benchmark = weighted.mean(ret_excess, weight_benchmark)
+    ) %>%
+    pivot_longer(-month, values_to = "portfolio_return", names_to = "model") %>%
+    group_by(model) %>%
+    summarize(tibble(
+      "Certainty equivalent" = mean(portfolio_return) - (gamma/2)*var(portfolio_return)
+    )) %>%
+    mutate(model = gsub("return_", "", model)) %>%
+    pivot_longer(-model, names_to = "measure") %>%
+    pivot_wider(names_from = model, values_from = value)
+  
+  return(evaluation)
+}
+```
+
+
+```{r}
+# Function to calculate weights:
+compute_portfolio_weights <- function(theta,
+                                      data) {
+  data %>%
+    group_by(month) %>%
+    bind_cols(
+      characteristic_tilt = data %>% ungroup %>%
+        transmute(size = size / n,
+                  bm = bm / n,
+                  beta = beta / n) %>%
+        as.matrix() %*% theta %>% as.numeric()
+    ) %>%
+    mutate(
+      # Definition of benchmark weight
+      weight_benchmark = 1 / n,
+      # Parametric portfolio weights
+      weight_tilt = weight_benchmark + characteristic_tilt,
+      # Weights sum up to 1
+      weight_tilt = weight_tilt / sum(weight_tilt) 
+    ) %>%
+    ungroup()
+}
+
+
+```
+
+
+```{r}
+compute_objective_function <- function(theta,
+                                       data,
+                                       objective_measure = "Certainty equivalent") {
+  
+  processed_data <- compute_portfolio_weights(
+    theta,
+    data
+  )
+
+  objective_function <- evaluate_portfolio(processed_data) %>%
+    filter(measure == objective_measure) %>%
+    pull(tilt)
+
+  return(-objective_function)
+}
+
+optimal_theta <- optim(
+  par = rep(1.5, 3), 
+  compute_objective_function,
+  objective_measure = "Certainty equivalent",
+  data = data
+)
+
+optimal_theta$par
 ```
 
