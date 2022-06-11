@@ -39,20 +39,21 @@ library(xts)
 
 ### 1.
 **Use the data until December 31, 2015 to estimate the parameters of the Fama French 3-factor model.**
-
+We load in the csv file. First we filter the data so that we have until (and including) December 31st 2015. Next, we loop through each permno to perform the regression to estimate the parameters of the Fama-French 3 factor model. 
 ```{r}
 #Loading in the CSV file
 data <- read_csv("data/data_exam2022.csv") %>%
   filter(month < "2016-01-01") %>% drop_na()
 
 #Estimation:
+#Creating matrix to store coefficient values
 coefficients <- matrix(NA,
                              nrow = nrow(unique(data['permno'])),
                              ncol = 5) 
 
-colnames(coefficients) = c("Permno","Alpha","mkt_excess","smb","hml")
+colnames(coefficients) = c("Permno","Alpha","beta_M","beta_smb","beta_hml")
 
-for (i in 1:8) {
+for (i in 1:8) { #Looping through permnos
   
   
   t =  unique(data['permno'])[i,]
@@ -62,8 +63,10 @@ for (i in 1:8) {
   coefficients[i,1] <- t[[1]]
 }
 
-coefficients %>% kbl(caption = "Summary of Fama-French 3 Factor model regression coefficients",digits = 4) %>%
+#Creating table to portray results
+coefficients %>% kbl(caption = "Table 1: Summary of Fama-French 3 Factor model regression coefficients",digits = 4) %>%
   kable_classic(full_width = F, html_font = "Cambria")
 
 ```
-
+**Give a brief interpretation of the values.**
+The above table shows the estimated alpha along with variable coefficients for all variables in the 3 factor model. Alpha can be interpreted as the intercept, i.e. the return in excess of the expected return, conditional on the variables included in the model. The beta values are the regression coefficients for the included variables and shows how much of the expected excess return of asset i that is explained by the market excess return, the small minus big and high minus low factor returns respectively. 
