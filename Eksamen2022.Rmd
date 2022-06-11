@@ -1,30 +1,53 @@
 ---
 title: "Exam2022"
-author: "Oliver Nyström"
+author: "tfd199, lhb642, XXXXX HUSK DENNE"
 date: "6/11/2022"
 output: pdf_document
 ---
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r}
+library(readr)
+library(RSQLite)
+library(tidyverse)
+library(tidymodels) 
+library(furrr) 
+library(glmnet)
+library(broom)
+library(timetk)
+library(scales)
+library(lubridate)
+library(scales)
+library(frenchdata)
+library(caret)
+library(ggplot2)
+library(ggpubr)
+library(kableExtra)
+library(mltools)
+library(data.table)
+library(vtable)
+library(keras)
+library(quadprog)
+library(rmgarch)
+library(xts)
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+##1.
+**Use the data until (including) December 31, 2015 to estimate the parameters of the Fama French 3-factor model.**
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+```{r}
+#Loading in the CSV file
+data <- read_csv("data/data_exam2022.csv")
 
-```{r cars}
-summary(cars)
+estimation_data <- data %>%
+  mutate(month = as.Date(as.POSIXct.Date(month))) %>%
+  filter(month < "2016-01-01")
+
+#Estimating 
+fit_10026 <- lm(ret_excess ~ mkt_excess + smb + hml,
+  data = estimation_data %>%
+    filter(permno == '10026')
+)
+
+#coefficients(fit_10026)
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
