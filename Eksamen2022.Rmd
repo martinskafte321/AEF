@@ -70,3 +70,14 @@ coefficients %>% kbl(caption = "Table 1: Summary of Fama-French 3 Factor model r
 ```
 **Give a brief interpretation of the values.**
 The above table shows the estimated alpha along with variable coefficients for all variables in the 3 factor model. Alpha can be interpreted as the intercept, i.e. the return in excess of the expected return, conditional on the variables included in the model. The beta values are the regression coefficients for the included variables and shows how much of the expected excess return of asset i that is explained by the market excess return, the small minus big and high minus low factor returns respectively. 
+
+**Derive the model-implied expected gross excess return and the model-implied variance covariance matrix.**
+```{r}
+data %>%
+  filter(permno == '10026') %>%
+  replace(is.na(.), 0) %>%
+  mutate(impexpret = 0.0102 + 0.5632 * mkt_excess + 0.5944 * smb + 0.4427 * hml)
+
+#else if(permno == '10032'){0.0052 + }
+```
+
