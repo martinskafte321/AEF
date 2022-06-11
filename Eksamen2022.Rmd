@@ -79,8 +79,7 @@ coefficients %>% kbl(caption = "Table 1: Summary of Fama-French 3 Factor model r
 The above table shows the estimated alpha along with variable coefficients for all variables in the 3 factor model. Alpha can be interpreted as the intercept, i.e. the return in excess of the expected return, conditional on the variables included in the model. The beta values are the regression coefficients for the included variables and shows how much of the expected excess return of asset i that is explained by the market excess return, the small minus big and high minus low factor returns respectively. 
 
 **Derive the model-implied expected gross excess return and the model-implied variance covariance matrix.**
-
-
+We use the estimated model for each stock to derive a full series of model-implied expected returns. When that is done, we take the mean of the series for each asset to arrive at a final model-implied expected gross excess return. For the variance covariance matrix, we simply use the cov() function on the return matrix used to find $\hat{\mu}^{FF}$.
 ```{r}
 
 ret_matrix <- matrix(NA,
@@ -101,6 +100,13 @@ for (m in 1:nrow(unique(data['permno']))) {
 # using the returns matrix, we can compute the covariance matrix and sample mean
 sigma <- cov(ret_matrix)
 mu <- colMeans(ret_matrix)
+
+
+t(mu) %>% kbl(caption = "Table 2: Model-implied expected gross excess returns",digits = 4) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+t(sigma) %>% kbl(caption = "Table 3: Model-implied variance-covariance matrix",digits = 4) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
 ```
 
 *What determines the correlation of the returns?*
