@@ -1,9 +1,15 @@
 ---
 title: "Exam2022"
-author: "tfd199, lhb642, XXXXX HUSK DENNE"
+author: "tfd199, lhb642, tgx333"
 date: "6/11/2022"
 output: pdf_document
 ---
+
+```{r setup, include=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
 ```{r}
 library(readr)
 library(RSQLite)
@@ -31,23 +37,33 @@ library(xts)
 ```
 
 
-##1.
-**Use the data until (including) December 31, 2015 to estimate the parameters of the Fama French 3-factor model.**
+### 1.
+**Use the data until December 31, 2015 to estimate the parameters of the Fama French 3-factor model.**
 
 ```{r}
 #Loading in the CSV file
-data <- read_csv("data/data_exam2022.csv")
+data <- read_csv("data/data_exam2022.csv") %>%
+  filter(month < "2016-01-01") %>% drop_na()
 
-estimation_data <- data %>%
-  mutate(month = as.Date(as.POSIXct.Date(month))) %>%
-  filter(month < "2016-01-01")
+#Estimation:
+coefficients <- matrix(NA,
+                             nrow = nrow(unique(data['permno'])),
+                             ncol = 5) 
 
-#Estimating 
-fit_10026 <- lm(ret_excess ~ mkt_excess + smb + hml,
-  data = estimation_data %>%
-    filter(permno == '10026')
-)
+colnames(coefficients) = c("Permno","Alpha","mkt_excess","smb","hml")
 
-#coefficients(fit_10026)
+for (i in 1:8) {
+  
+  
+  t =  unique(data['permno'])[i,]
+  coefficients[i,2:5] <- lm(ret_excess ~ mkt_excess + smb + hml, 
+     data = data %>% filter(permno == t[[1]] )) %>% coefficients()
+  
+  coefficients[i,1] <- t[[1]]
+}
+
+coefficients %>% kbl(caption = "Summary of Fama-French 3 Factor model regression coefficients",digits = 4) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
 ```
 
