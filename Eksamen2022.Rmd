@@ -37,7 +37,7 @@ library(xts)
 ```
 
 
-### 1.
+### 1.1
 **Use the data until December 31, 2015 to estimate the parameters of the Fama French 3-factor model.**
 We load in the csv file. First we filter the data so that we have until (and including) December 31st 2015. Next, we loop through each permno to perform the regression to estimate the parameters of the Fama-French 3 factor model. 
 ```{r}
@@ -78,6 +78,7 @@ coefficients %>% kbl(caption = "Table 1: Summary of Fama-French 3 Factor model r
 **Give a brief interpretation of the values.**
 The above table shows the estimated alpha along with variable coefficients for all variables in the 3 factor model. Alpha can be interpreted as the intercept, i.e. the return in excess of the expected return, conditional on the variables included in the model. The beta values are the regression coefficients for the included variables and shows how much of the expected excess return of asset i that is explained by the market excess return, the small minus big and high minus low factor returns respectively. 
 
+##1.2
 **Derive the model-implied expected gross excess return and the model-implied variance covariance matrix.**
 We use the estimated model for each stock to derive a full series of model-implied expected returns. When that is done, we take the mean of the series for each asset to arrive at a final model-implied expected gross excess return. For the variance covariance matrix, we simply use the cov() function on the return matrix used to find $\hat{\mu}^{FF}$.
 ```{r}
@@ -111,3 +112,28 @@ t(sigma) %>% kbl(caption = "Table 3: Model-implied variance-covariance matrix",d
 
 *What determines the correlation of the returns?*
 In our model, all predictors (market excess, smb and hml returns) have the same value throughout the series across all permnos. Therefore, the only thing that determines the estimated excess returns, and thus the only thing that makes the estimated returns differ, are the weights assigned to each variable, i.e. the coefficients. Adding to this, the betas themselves are determined using OLS, where the aim is to fit the regression by minimizing the squared errors, i.e. the sum of the square differences between the observed and predicted values. Therefore, the beta value of a given firm depends on the performance of the firm's stock relative to the performance of all other stocks.
+
+
+##1.3
+**Use your parameter estimates to report the computed implied mean-variance efficient portfolio weight for an investor with risk aversion $\gamma$ = 4**
+```{r}
+# Function to compute optimal portfolio weights:
+efficient_weights <- function(mu, sigma, gamma = 4) {
+  
+  iota <- rep(1, ncol(sigma))
+ 
+  sigma_inv <- solve(sigma)
+  
+  w_mvp <- sigma_inv %*% iota
+  w_mvp <- as.vector(w_mvp / sum(w_mvp))
+  
+  w_opt <- w_mvp + 1/gamma * (sigma_inv - 1 / sum(sigma_inv) * sigma_inv %*% iota %*% t(iota) %*% sigma_inv) %*% mu
+  
+  return(as.vector(w_opt))
+}
+
+w_efficient = efficient_weights(sigma = sigma,
+                                   mu = mu
+                                )
+```
+
