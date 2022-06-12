@@ -13,6 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(readr)
 library(RSQLite)
+library(cvCovEst)
 library(tidyverse)
 library(tidymodels) 
 library(furrr) 
@@ -96,19 +97,16 @@ for (m in 1:nrow(unique(data['permno']))) {
    l =  unique(data['permno'])[m,]
  ret_matrix[,m] <-  predict(lm(ret_excess ~ mkt_excess + smb + hml, 
      data = data %>% filter(permno == l[[1]] )), newdata = data %>% filter(permno==l[[1]]) %>% select(mkt_excess,smb,hml))
- 
- 
 }
- 
-# using the returns matrix, we can compute the covariance matrix and sample mean
 
-sigma <- cov(ret_matrix)
-mu <- colMeans(ret_matrix)
+# using the returns matrix, we can compute the covariance matrix and sample mean
+sigma <- linearShrinkLWEst(ret_matrix)
+mu <- colMeans(ret_matrix2)
 
 ```
 
 ```{r}
-#Prepping dataframe for table generation
+# Prepping dataframe for table generation
 mu_tbl <- data.frame(t(mu)) 
 names(mu_tbl) = substring(names(mu_tbl), 2)
 mu_tbl['Permno'] <- 'Mu'
@@ -151,8 +149,10 @@ efficient_weights <- function(mu, sigma, gamma = 4) {
 w_efficient = efficient_weights(sigma = sigma,
                                    mu = mu
                                 )
+
 ```
 ### 2.1
+
 **Briefly describe the method: What is the intuition behind the parameter vector $\theta$ and how do Brandt, Santa-Clara and Valkanov propose to estimate $\theta$?**
 The authors model the portfolio weights of each asset as a function of the assets characteristics. The coefficients of this function are found by optimizing the investor’s average utility of the portfolio’s return over the sample period. The optimal weight in each stock is found by taking the sum of its market capitalization weight and an optimal deviation from that market cap weight which depends parametrically on the characteristics of the firms. The included characteristics are market cap, book-to-market ratio, lagged one-year returns of each firm. Moreover, investors are assumed to have constant relative risk aversion preferences. \
 
@@ -274,5 +274,6 @@ optimal_weights <- compute_portfolio_weights(
 
 optimal_weights %>% pivot_wider(names_from = permno, values_from = weight_tilt) %>% kbl(caption = "Table 5: Optimal weights in the last period based on theta and stock characteristics", digits = 3) %>%
   kable_classic(full_width = F, html_font = "Cambria")
+
 ```
 
