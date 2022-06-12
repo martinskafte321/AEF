@@ -294,8 +294,6 @@ optimal_weights <- compute_portfolio_weights(
 optimal_weights %>% pivot_wider(names_from = permno, values_from = weight_tilt) %>% kbl(caption = "Table 6: Optimal weights in the last period based on theta and stock characteristics", digits = 3) %>%
   kable_classic(full_width = F, html_font = "Cambria")
 
-naive = 
-
 ```
 
 ### 3.1
@@ -331,17 +329,16 @@ weights_all <- weights_all[, c(1, 4, 2, 3, 5)]
 colnames(weights_all) <- c('permno','Exercise_1', 'Exercise_2', 'Naive', 'Efficient')
 weights_all %>% kbl(caption = "Table 7: Weights from the 4 portfolios", digits = 4) %>%
   kable_classic(full_width = F, html_font = "Cambria")
+```
 
+```{r}
+evaluations <- portfolio_data %>% select(month, permno, ret_excess) %>% left_join(weights_all, by = 'permno') %>%
+  pivot_longer(!c(month,permno,ret_excess), names_to = "portfolio", values_to = "w") %>% mutate(w_ret = ret_excess*w) %>% group_by(portfolio,permno) %>% summarise(ret = 12*mean(w_ret), sd = sqrt(12)*sd(w_ret)) %>% group_by(portfolio) %>% summarise(return = sum(ret), sd = sum(sd)) %>% mutate(sharpe_ratio = return/sd)
 
-
-portfolio_data %>% select(month, permno, ret_excess) %>% left_join(weights_all, by = 'permno') %>% mutate(naive_ret = Naive*ret_excess,
-                                                                                                          exc1_ret = Exercise_1*ret_excess,
-                                                                                                          excs2_ret = Exercise_2*ret_excess,
-                                                                                                          efficient_ret = Efficient*ret_excess
-                                                                                                          ) %>% group_by(permno) %>% summarise(naive = mean(naive_ret), naive_sd = sd(naive_ret), efficient = mean(efficient_ret), efficient_sd = sd(efficient_ret), exc1 = mean(exc1_ret), exc1_sd = sd(exc1_ret), exc2 = mean(excs2_ret), exc2_sd = sd(excs2_ret))
-
-
+evaluations %>% kbl(caption = "Table 8: Annualized returns, standard deviations and sharpe ratios of the 4 portfolios", digits = 3) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
 
 
 ```
+
 
