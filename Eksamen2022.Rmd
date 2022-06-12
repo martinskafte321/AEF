@@ -156,7 +156,7 @@ w_efficient = efficient_weights(sigma = sigma,
                                    mu = mu
                                 )
 
-#Prepping table ensuring that the weights sum to 1 (100%)
+# Prepping table ensuring that the weights sum to 1 (100%)
 w_efficient_tbl <- as.data.frame(w_efficient)
 w_efficient_tbl['Permno'] <- c('10026', '10032', '10044', '10104', '10200', '10232', '10252', '10397')
 w_efficient_tbl <- w_efficient_tbl[ , c("Permno",    # Reorder data frame
@@ -215,7 +215,7 @@ evaluate_portfolio <- function(weights_crsp, gamma = 4) {
     mutate(model = gsub("return_", "", model)) %>%
     pivot_longer(-model, names_to = "measure") %>%
     pivot_wider(names_from = model, values_from = value)
-  
+
   return(evaluation)
 }
 ```
@@ -326,19 +326,35 @@ weights_all = cbind(weights_all, weights_eff)
 
 #Creating table with all weights
 weights_all <- weights_all[, c(1, 4, 2, 3, 5)]
-colnames(weights_all) <- c('permno','Exercise_1', 'Exercise_2', 'Naive', 'Efficient')
+colnames(weights_all) <- c('permno','FF-3', 'PP', 'Naive', 'Efficient')
 weights_all %>% kbl(caption = "Table 7: Weights from the 4 portfolios", digits = 4) %>%
   kable_classic(full_width = F, html_font = "Cambria")
 ```
 
+
+**Report the annualized Sharpe Ratio of the four strategies and discuss the differences.**
+The naive portfolio allocation is undoubtedly the best performing strategy in this backtest. The strategy is preferable both in terms of giving the highest return and the lowest standard deviation (volatility) with values respectively at 12.5\% and 26.2\%, which gives a Sharpe ratio of 0.47. The second best performing strategy is the portfolio allocation based on efficient weights gaining a Sharpe ratio of 0.21. Further, the strategy of parametric portfolio choices from part 2 and the Fama-French 3-factor model from part 1 delivers respectively a Sharpe ratio of 0.067 and -0.081. 
+
+The differences between on one side the efficient portfolio and naive, and on the other side the FF-3 and PP are quite significant. The FF-3 is performing really bad with a negative gross return, which can be supported by the fact that the portfolio weights are quite extreme in some cases. Table 4 shows that the strategy goes long in company '10044' by more than 11.800\% and short -8.209\%, which will determine some extreme positions. In a small tradable stock universe like this, extreme positions will have high importance, which is clear for the former mentioned position, since this gives a return of -111\% and -112\% for 10104 (this isn't reported in the table). This has a huge influence on the performance of the portfolio overall. Exposure towards single stocks can be diversified away, but with a small universe, it's difficult to implement a strategy like this. The problem of high weights likely lies in the variance-covariance matrix, which is very close to being non-invertiable due to the nature of the model (return estimates being linear dependent). 
+
+
 ```{r}
 evaluations <- portfolio_data %>% select(month, permno, ret_excess) %>% left_join(weights_all, by = 'permno') %>%
-  pivot_longer(!c(month,permno,ret_excess), names_to = "portfolio", values_to = "w") %>% mutate(w_ret = ret_excess*w) %>% group_by(portfolio,permno) %>% summarise(ret = 12*mean(w_ret), sd = sqrt(12)*sd(w_ret)) %>% group_by(portfolio) %>% summarise(return = sum(ret), sd = sum(sd)) %>% mutate(sharpe_ratio = return/sd)
+  pivot_longer(!c(month,permno,ret_excess), names_to = "portfolio", values_to = "w") %>% mutate(w_ret = ret_excess*w) %>% group_by(portfolio,permno) %>% summarise(ret = 12*mean(w_ret), sd = sqrt(12)*sd(w_ret))
 
-evaluations %>% kbl(caption = "Table 8: Annualized returns, standard deviations and sharpe ratios of the 4 portfolios", digits = 3) %>%
+evaluations %>% group_by(portfolio) %>% summarise(Return = sum(ret), SD = sum(sd)) %>% mutate('Sharpe Ratio' = Return/SD) %>% kbl(caption = "Table 8: Annualized returns, standard deviations and sharpe ratios of the 4 portfolios", digits = 3) %>%
   kable_classic(full_width = F, html_font = "Cambria")
 
-
+evaluations %>% ggplot(aes(
+  x = as.factor(permno), y = ret, fill = portfolio
+)) + geom_bar(stat="identity") +
+labs(
+    title = "Return generated per stock by various portfolios",
+    x = "Permno",
+    y = "Return generated",
+    fill = "Portfolio"
+  ) +
+  scale_y_continuous(labels = scales::percent)
 ```
 
 
