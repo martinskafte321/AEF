@@ -45,8 +45,13 @@ options(scipen=999)
 We load in the csv file. First we filter the data so that we have until (and including) December 31st 2015. Next, we loop through each permno to perform the regression to estimate the parameters of the Fama-French 3 factor model. 
 ```{r}
 #Loading in the CSV file
-data <- read_csv("data/data_exam2022.csv") %>%
-  filter(month < "2016-01-01") %>% drop_na()
+dataset <- read_csv("data/data_exam2022.csv") 
+
+data <- dataset %>%
+  filter(month < "2016-01-01") 
+
+portfolio_data <- dataset %>%
+  filter(month >= "2016-01-01")
 
 #Estimation:
 #Creating matrix to store coefficient values
@@ -295,9 +300,8 @@ naive =
 
 ### 3.1
 
+**Compare the performance of the two portfolio weight vectors from Exercise 1 and Exercise 2 with the naive allocation and the efficient portfolio**
 ```{r}
-##3.
-*Compare the performance of the two portfolio weight vectors from Exercise 1 and Exercise 2 with the naive allocation and the efficient portfolio*
 
 #Weights for efficient portfolio
 retmatrix_eff <- data %>% select(month, permno, ret_excess) %>% pivot_wider(
@@ -324,9 +328,19 @@ weights_all = cbind(weights_all, weights_eff)
 
 #Creating table with all weights
 weights_all <- weights_all[, c(1, 4, 2, 3, 5)]
-colnames(weights_all) <- c('Permno','Exercise_1', 'Exercise_2', 'Naive', 'Efficient')
+colnames(weights_all) <- c('permno','Exercise_1', 'Exercise_2', 'Naive', 'Efficient')
 weights_all %>% kbl(caption = "Table 7: Weights from the 4 portfolios", digits = 4) %>%
   kable_classic(full_width = F, html_font = "Cambria")
+
+
+
+portfolio_data %>% select(month, permno, ret_excess) %>% left_join(weights_all, by = 'permno') %>% mutate(naive_ret = Naive*ret_excess,
+                                                                                                          exc1_ret = Exercise_1*ret_excess,
+                                                                                                          excs2_ret = Exercise_2*ret_excess,
+                                                                                                          efficient_ret = Efficient*ret_excess
+                                                                                                          ) %>% group_by(permno) %>% summarise(naive = mean(naive_ret), naive_sd = sd(naive_ret), efficient = mean(efficient_ret), efficient_sd = sd(efficient_ret), exc1 = mean(exc1_ret), exc1_sd = sd(exc1_ret), exc2 = mean(excs2_ret), exc2_sd = sd(excs2_ret))
+
+
 
 
 ```
