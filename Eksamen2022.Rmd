@@ -156,8 +156,8 @@ w_efficient_tbl <- as.data.frame(w_efficient)
 w_efficient_tbl['Permno'] <- c('10026', '10032', '10044', '10104', '10200', '10232', '10252', '10397')
 w_efficient_tbl <- w_efficient_tbl[ , c("Permno",    # Reorder data frame
                        names(w_efficient_tbl)[names(w_efficient_tbl) != "Permno"])]
-w_efficient_tbl[nrow(w_efficient_tbl) + 1,] = c("SUM",sum(w_efficient)) 
-w_efficient_tbl <- w_efficient_tbl %>% mutate(w_efficient = as.numeric(w_efficient))
+w_efficient_tbl[nrow(w_efficient_tbl) + 1,] = c("Sum",sum(w_efficient)) 
+w_efficient_tbl <- w_efficient_tbl %>% mutate(w_efficient = as.numeric(w_efficient)) %>% pivot_wider(names_from = Permno, values_from = w_efficient)
 
 w_efficient_tbl %>% kbl(caption = "Table 4: Weights assigned to stocks based on the model implied excess returns", digits = 4) %>%
   kable_classic(full_width = F, html_font = "Cambria")
