@@ -39,7 +39,7 @@ library(rmgarch)
 library(xts)
 
 options(scipen=999)
-options(digits = 2) 
+options(digits = 5) 
 ```
 
 
@@ -73,11 +73,11 @@ crsp_monthly <- crsp_monthly %>%
 ### 1. 
 **Very briefly state the definition of the variables permno, ret_excess and mktcap.**
 
-PERMNO is a unique permanent security identification number assigned by CRSP to each security. Thus, PERMNO is a unique company identifier. \\
+PERMNO is a unique permanent security identification number assigned by CRSP to each security. Thus, PERMNO is a unique company identifier. \
 
-Excess return for a stock is the difference between the stock return and the return on the risk-free security over the same period. For such risk-free securities, it is common to use a government bond such as a 10-year US Treasury bond.\\ 
+Excess return for a stock is the difference between the stock return and the return on the risk-free security over the same period. For such risk-free securities, it is common to use a government bond such as a 10-year US Treasury bond.\ 
 
-The variable 'mktcap' is defined as the market capitalization, which refers to the total dollar market value of a company's shares outstanding. Market capitalization is commonly referred to as "market cap," and is calculated by multiplying the total number of a company's outstanding shares by the current share market price.\\
+The variable 'mktcap' is defined as the market capitalization, which refers to the total dollar market value of a company's shares outstanding. Market capitalization is commonly referred to as "market cap," and is calculated by multiplying the total number of a company's outstanding shares by the current share market price.\
 
 **Provide suitable summary statistics of the cross-section of monthly excess returns and market capitalization in the CRSP sample.**
 
@@ -85,6 +85,8 @@ The variable 'mktcap' is defined as the market capitalization, which refers to t
 
 ret <- crsp_monthly %>%
   group_by(month) %>%
+  mutate(ret_excess = ret_excess * 100) %>%
+  mutate(ret_excess = as.numeric(ret_excess)) %>%
   summarise(across(ret_excess,
                   list(Mean = mean, SD = sd, Min = min,
                     q25 = ~quantile(., 0.25),
@@ -97,6 +99,7 @@ ret <- crsp_monthly %>%
 #Summary statistics for mktcap
 mkt <- crsp_monthly %>%
   group_by(month) %>%
+  mutate(mktcap = as.numeric(mktcap)) %>%
   summarise(across(mktcap,
                   list(Mean = mean, SD = sd, Min = min,
                     q25 = ~quantile(., 0.25),
@@ -106,7 +109,7 @@ mkt <- crsp_monthly %>%
   summarise(across(-month, mean)) %>% add_column('Variable' = "mktcap")
 
 #Combine statistics into one table
-rbind(ret, mkt) %>% relocate(Variable) %>% kbl(caption = "Summary statistics for monthly excess returns (%) and market capitalization (Million USD)",digits = 3) %>%
+rbind(ret, mkt) %>% relocate(Variable) %>% kbl(caption = "Summary statistics for monthly excess returns (%) and market capitalization (Million USD)",digits = 2) %>%
   kable_classic(full_width = F, html_font = "Cambria")
 
 remove(ret,mkt)
@@ -241,6 +244,7 @@ Since market cap is basically the stock price times volume, there is rarely a la
 #Creating summary statistics for each month, i.e. 700+ rows of summary statistics
 mom_stat = data_for_sorting %>% 
   group_by(month) %>%
+  mutate(momentum = as.numeric(momentum)) %>%
   summarise(across(
     momentum, #For the momentum column, summarise the following elements in list()
     list(Mean = mean,SD = sd, Min = min,
@@ -253,10 +257,10 @@ mom_stat = data_for_sorting %>%
 
 # Summarize the previously created monthly summary statistics into one row by taking the mean in each column
 mom_stat %>% 
-  summarise(across(-month,mean)) %>% kbl(caption = "Summary statistics for momentum",digits = 3) %>%
+  summarise(across(-month,mean)) %>% kbl(caption = "Summary statistics for momentum",digits = 2) %>%
   kable_classic(full_width = F, html_font = "Cambria")
 
-remove(mom_stat)
+#remove(mom_stat)
 
 ```
 
@@ -330,7 +334,7 @@ momentum_portfolios %>%
   summarise(
     mom_mean = mean(momentum), #arithmetic average of momentum
     mc_mean = mean(mktcap) #arithmetic average of mktcap
-    ) %>% kbl(caption = "Mean momentum and market capitalization for sorted portfolios", digits = 3) %>% 
+    ) %>%kbl(caption = "Mean momentum and market capitalization for sorted portfolios", digits = 3) %>% 
   kable_classic(full_width = F, html_font = "Cambria")
 ```
 This summary shows that the lowest portfolio sorts on momentum has the lowest market capitalization as well. Momentum is small for the largest companies. Momentum portfolios ranging from 6 to 8 has the highest market cap. The fact that the highest momentum companies are not the largest makes sense, since the largest companies might not be able to grow their business as much as smaller. 
@@ -490,7 +494,7 @@ data[i,"k ahead"] = k[[i]]
 }
 
 data %>% kbl(caption = "Porfolio performace with different time-horizons", digits = 3) %>% 
-  kable_classic(full_width = T, html_font = "Cambria")
+  kable_classic(full_width = F, html_font = "Cambria")
 
 
 remove(k,i,estimate,data, lag_excess_ret, assign_portfolio, portfolio)
@@ -576,7 +580,7 @@ We calculate turnover per month as: $$\frac{Minimum\ of \ assets \ bought\ or\ s
 
 **Report the resulting Sharpe-ratio and average turnover and compare to the baseline momentum strategy from exercise 4.**
 
-The table below shows that the portfolio, which doesn't short the lowest decile ends up with the highest sharpe ratio of 0.15 with the lowest turnover at 24.7\%. The portfolio, which go short the lowest decile ends up with a sharpe ratio of 0.08 and a turnover ratio of 25\%. To sum up, the best strategy seems to be without a short strategy. 
+The table below shows that the portfolio, which doesn't short the lowest decile ends up with the highest sharpe ratio of 0.15 with the lowest turnover at 24.7\%. The portfolio, which takes a short position in the lowest decile ends up with a sharpe ratio of 0.08 and a turnover ratio of 25\%. To sum up, the best strategy seems to be without a short-selling strategy. 
 
 ```{r, message=FALSE}
 
@@ -584,6 +588,7 @@ The table below shows that the portfolio, which doesn't short the lowest decile 
 sharpe_old = strategy_portfolio_original %>%
   pivot_wider(names_from = portfolio, values_from = excess_ret) %>%
   mutate(highlow = high-low) %>%
+  mutate(highlow = as.numeric(highlow)) %>%
   ungroup() %>%
   summarise(sd = sd(highlow),highlow = mean(highlow)) %>%
   transmute(sharpe = highlow/sd)
@@ -592,21 +597,18 @@ sharpe_old = strategy_portfolio_original %>%
 sharpe_new = momentum_new %>% 
   group_by(month,portfolio) %>%
   summarise(excess_ret = weighted.mean(ret_excess, mktcap_lag)) %>%
+  mutate(excess_ret = as.numeric(excess_ret)) %>%
   pivot_wider(names_from = portfolio, values_from = excess_ret) %>%
   ungroup() %>%
   summarise(sd = sd(high),high = mean(high)) %>%
   transmute(sharpe = high/sd)
 
-
-table = matrix(c(sharpe_old,sharpe_new,turnover_org,turnover_new), ncol=2)
+table <- cbind(rbind(sharpe_old, sharpe_new), rbind(turnover_org, turnover_new))
 rownames(table) <- c('Original portfolio','No short-portfolio')
 colnames(table) <- c('Sharpe Ratio','Turnover ratio')
 
-table %>% kbl(caption = "Sharpe ratio and turnover of portfolios", digits = 2) %>% 
+table %>% kbl(caption = "Sharpe ratio and turnover of portfolios", digits = 3) %>% 
   kable_classic(full_width = F, html_font = "Cambria")
-
-
-
 ```
 
 
