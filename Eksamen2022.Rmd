@@ -2,11 +2,13 @@
 title: "Exam2022"
 author: "tfd199, lhb642, tgx333"
 date: "6/11/2022"
-output: pdf_document
+output:
+  html_document:
+    df_print: paged
 ---
 
-```{r setup, include=FALSE, message=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r setup, include=FALSE, message=FALSE,warning=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 ```
 
 
@@ -40,7 +42,7 @@ options(scipen=999)
 ```
 
 
-### 1.1
+#### 1
 **Use the data until December 31, 2015 to estimate the parameters of the Fama French 3-factor model.**
 We load in the csv file. First we filter the data so that we have until (and including) December 31st 2015. Next, we loop through each permno to perform the regression to estimate the parameters of the Fama-French 3 factor model. 
 ```{r}
@@ -84,9 +86,8 @@ coefficients %>% kbl(caption = "Table 1: Summary of Fama-French 3 Factor model r
 
 ```
 **Give a brief interpretation of the values.**
-The above table shows the estimated alpha along with variable coefficients for all variables in the 3 factor model. Alpha can be interpreted as the intercept, i.e. the return in excess of the expected return, conditional on the variables included in the model. The beta values are the regression coefficients for the included variables and shows how much of the expected excess return of asset i that is explained by the market excess return, the small minus big and high minus low factor returns respectively. 
+The above table shows the estimated alpha along with variable coefficients for all variables in the 3 factor model. Alpha can be interpreted as the intercept, i.e. the return in excess of the expected return, conditional on the variables included in the model. The beta values are the regression coefficients for the included variables and shows how much of the expected excess return of asset i that is explained by the market excess return, the small minus big and high minus low factor returns respectively.
 
-##1.2
 **Derive the model-implied expected gross excess return and the model-implied variance covariance matrix.**
 We use the estimated model for each stock to derive a full series of model-implied expected returns. When that is done, we take the mean of the series for each asset to arrive at a final model-implied expected gross excess return. For the variance covariance matrix, we simply use the cov() function on the return matrix used to find $\hat{\mu}^{FF}$.
 ```{r}
@@ -129,11 +130,11 @@ t(sigma) %>% kbl(caption = "Table 3: Model-implied variance-covariance matrix",d
 
 
 
-*What determines the correlation of the returns?*
+**What determines the correlation of the returns?**
 In our model, all predictors (market excess, smb and hml returns) have the same value throughout the series across all permnos. Therefore, the only thing that determines the estimated excess returns, and thus the only thing that makes the estimated returns differ, are the weights assigned to each variable, i.e. the coefficients. Adding to this, the betas themselves are determined using OLS, where the aim is to fit the regression by minimizing the squared errors, i.e. the sum of the square differences between the observed and predicted values. Therefore, the beta value of a given firm depends on the performance of the firm's stock relative to the performance of all other stocks.
 
 
-### 1.3
+
 **Use your parameter estimates to report the computed implied mean-variance efficient portfolio weight for an investor with risk aversion $\gamma$ = 4**
 As visible in table 4, we end up with weights that indicate an extremely aggressive trading strategy. This is most visible by the long position of 1180% in permno 10044 and the short position of 821% in permno 10104. As our weights sum to 1, i.e. 100%, we accept the weights, however, we want to note that we do not necessarily deem it a realistic strategy. 
 ```{r}
@@ -164,27 +165,31 @@ w_efficient_tbl <- w_efficient_tbl[ , c("Permno",    # Reorder data frame
 w_efficient_tbl[nrow(w_efficient_tbl) + 1,] = c("Sum",sum(w_efficient)) 
 w_efficient_tbl <- w_efficient_tbl %>% mutate(w_efficient = as.numeric(w_efficient)) %>% pivot_wider(names_from = Permno, values_from = w_efficient)
 
-w_efficient_tbl %>% kbl(caption = "Table 4: Weights assigned to stocks based on the model implied excess returns", digits = 4) %>%
+w_efficient_tbl %>% kbl(caption = "Table 4: Stock weights estimated from implied excess returns", digits = 4) %>%
   kable_classic(full_width = F, html_font = "Cambria")
 
 ```
 
-### 2.1
+#### 2
 
-**Briefly describe the method: What is the intuition behind the parameter vector $\theta$ and how do Brandt, Santa-Clara and Valkanov propose to estimate $\theta$?**
+**What is the intuition behind the parameter vector $\theta$ and how do Brandt, Santa-Clara and Valkanov propose to estimate $\theta$?**
 The authors model the portfolio weights of each asset as a function of the assets characteristics. The coefficients of this function are found by optimizing the investor’s average utility of the portfolio’s return over the sample period. The optimal weight in each stock is found by taking the sum of its market capitalization weight and an optimal deviation from that market cap weight which depends parametrically on the characteristics of the firms. The included characteristics are market cap, book-to-market ratio, lagged one-year returns of each firm. Moreover, investors are assumed to have constant relative risk aversion preferences. \
 
 The method implies that the coefficients $\theta$ are held constant across assets over the entire time period. This implies that the portfolio weights depends solely on the characteristics and not its historic returns. Therefore, two stocks with similar characteristics associated with returns and risk should have similar weights even though their sample returns may differ. It is implicitly assumed that the aforementioned characteristics fully capture all aspects of the joint distribution of returns that are deemed relevant for building an optimal portfolio. This implies that the coefficients that maximizes the conditional expected utility of the investor at a given point in time are the same for all dates. Therefore, they also maximize the unconditional utility of the investors. \ 
 
 \textbf{Estimating $\thea$:} In the paper, the coefficients, i.e. the maximum expected utility estimator, are estimated as a method of moments estimator from which the asymptotic covariance matrix can be estimated using the consistent estimator V. This approach allows the authors to test the model for certain problems, e.g. misspecified portfolio policy or with the implementation of different constraints which is allowed as long as the authors take the appropriate measures to estimate V (e.g., by using an autocorrelation-adjusted estimator of V when constraints are imposed). 
 
-### 2.2
+
 **Discuss the benefit of the parametrizing portfolio weights directly relative to the two-step procedure. What are potential disadvantages of direct weight parametrization?**
 The authors argues that their method is beneficial for different reasons. It is computationally simple, easily modified and extended, produces sensible portfolio weights, and offers robust performance in and out of sample. Moreover, it is argued that parameterization leads to a tremendous reduction in dimensionality, and it escapes issues with imprecise coefficient estimates and overfitting. \
 
 A disadvantage of the approach is the fact that characteristics are chosen arbitrarily, why one easily can assume that some information is not accounted for. Another disadvantage is that constraints on the portfolio weights (e.g. no-short selling constraints) implies that more complicated measures have to be implemented, as the weights will not automatically sum to one. Moreover, the critical assumptions regarding the characteristics fully capturing all aspects of the joint return distribution and the fact that coefficients are held constant for the entire period is somewhat unrealistic. As the authors write themselves: "While this is a convenient assumption, there is no obvious economic reason for the relation between firm characteristics and the joint distribution of returns to be time-invariant. In fact, there is substantial evidence that economic variables related to the business cycle forecast aggregate stock and bond returns".
 
-### 2.3
+
+
+**Report and discuss the values of \theta: Are the signs intuitive?**
+
+In Table 4, the visible coefficients are the relative deviations from the benchmark naive portfolio due to characteristics market capitalization, book-to-market ratio and CAPM beta. These values optimize the objective function of maximizing the investors certainty equivalent. The values imply that expected utility for the investor decreases with size and beta, while it increases with bm. In other words, weight is assigned towards smaller companies, companies with lower book-to-market ratios and companies which stock move against the market. This is in line with past literature and findings in XXX, that focus is to be put on smaller companies and companies with lower book-to-market ratios.
 
 ```{r}
 data = data %>%
@@ -281,9 +286,9 @@ t(opt_theta) %>% kbl(caption = "Table 5: Optimal estimates of theta", digits = 3
 
 ```
 
-In Table 4, the visible coefficients are the relative deviations from the benchmark naive portfolio due to characteristics market capitalization, book-to-market ratio and CAPM beta. These values optimize the objective function of maximizing the investors certainty equivalent. The values imply that expected utility for the investor decreases with size and beta, while it increases with bm. In other words, weight is assigned towards smaller companies, companies with lower book-to-market ratios and companies which stock move against the market. This is in line with past literature and findings in XXX, that focus is to be put on smaller companies and companies with lower book-to-market ratios.
 
 
+**Compute and report the optimal weights $w^{PP}$ **
 
 ```{r}
 optimal_weights <- compute_portfolio_weights(
@@ -296,7 +301,7 @@ optimal_weights %>% pivot_wider(names_from = permno, values_from = weight_tilt) 
 
 ```
 
-### 3.1
+### 3
 
 **Compare the performance of the two portfolio weight vectors from Exercise 1 and Exercise 2 with the naive allocation and the efficient portfolio**
 ```{r}
@@ -363,4 +368,18 @@ labs(
   scale_y_continuous(labels = scales::percent)
 ```
 
+**Outline the potential issues of the back-testing strategy in light of implementation short- falls and estimation uncertainty.**
 
+There exists several short-falls in the implementation of back-testing. To provide valid results through back-testing, all outside time-specific affecting factors has to be accounted for. Different time periods might not be suitable for comparisons, as circumstances that affect data points can change over time and results therefore can be affected by outside factors, such as booms and recessions or particular events. A general point is that what happened in the past cannot predict what will happen in the future, even though it can be argued that there lies information about the future in the past. \
+
+In the calculation of values, all values has to be based on weighted averages and cannot be summed. This as values otherwise would be affected by the length of the dataset considered, and different periods would not be comparable. If considering just a few tickers when performing financial back-testing, there is a risk of selection bias. It is important to not base a strategy on a back-test, as data might not be representable for other periods, and therefore not back-test until all research is conducted and the model is fullt specified. Overfitting a model on the data might cause the model to not fit other data. When back-testing, it is also important to ensure that results are re-producable.\
+
+**Discuss your expectations regarding the performance of the four strategies for a high-dimensional asset universe and a realistic assessment of transaction costs.**
+
+We expect the naive portfolio to do well also when considering a high-dimensional asset universe and transaction costs. Transaction costs will be comparatively low, as trades are made only when assets enter and exit the universe. The risk of low-performing stocks being a significant part of a portfolio decreases with the size of the asset universe, although this is also true for well-performing stocks. The general risk of the portfolio will decreases with a larger amount of assets. The effort in maintenance is low. The portfolio will follow the idea that there is a higher performance of smaller companies, in comparison to a weighted market portfolio. \
+
+A portfolio with the Fama-French factors can also be considered relatively cheap in terms of transaction costs. Trades are to be made in line with how companies develop, in relation to the considered Fama-French factors. In line with a larger asset universe, it should be easier for the model to properly weight a portfolio in terms of the included factors. \
+
+The efficient portfolio will become more diversified with a broader market portfolio, and risk will therefore decrease. The portfolio escapes some transaction costs, as parts of the portfolio is invested in the risk-free asset. \
+
+The portfolio based on parametriced characteristics has its strength in large universes that requires extensive calculations, as it reduces dimensionality. It is also argued to escape some estimation uncertainty. In terms of transaction costs, the model will be re balanced in line with changes in companies' relation to the characteristics beta, size and CAPM beta. It can be argued that companies' are fairly stable in terms of the characteristics and that transaction costs therefore are kept on a reasonable level.
