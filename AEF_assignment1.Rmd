@@ -1,6 +1,6 @@
 ---
 title: "MA 1: The Momentum Effect"
-author: "tgx333 \\ lhb642 \\ "
+author: "tgx333 \\ lhb642 \\ tfd199 "
 date: "13/6/2022"
 output:
   html_document: default
