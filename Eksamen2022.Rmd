@@ -199,15 +199,14 @@ evaluate_portfolio <- function(weights_crsp, gamma = 4) {
   
   evaluation <- weights_crsp %>%
     group_by(month) %>%
-    summarize(
+    summarise(
       return_tilt = weighted.mean(ret_excess, weight_tilt),
       return_benchmark = weighted.mean(ret_excess, weight_benchmark)
     ) %>%
     pivot_longer(-month, values_to = "portfolio_return", names_to = "model") %>%
     group_by(model) %>%
-    summarize(tibble(
-      "Certainty equivalent" = mean(portfolio_return) - (gamma/2)*var(portfolio_return)
-    )) %>%
+    summarise("Certainty equivalent" = mean(portfolio_return) - (gamma/2)*var(portfolio_return)
+    ) %>%
     mutate(model = gsub("return_", "", model)) %>%
     pivot_longer(-model, names_to = "measure") %>%
     pivot_wider(names_from = model, values_from = value)
@@ -279,6 +278,8 @@ t(opt_theta) %>% kbl(caption = "Table 5: Optimal estimates of theta", digits = 3
 
 In Table 4, the visible coefficients are the relative deviations from the benchmark naive portfolio due to characteristics market capitalization, book-to-market ratio and CAPM beta. These values optimize the objective function of maximizing the investors certainty equivalent. The values imply that expected utility for the investor decreases with size and beta, while it increases with bm. In other words, weight is assigned towards smaller companies, companies with lower book-to-market ratios and companies which stock move against the market. This is in line with past literature and findings in XXX, that focus is to be put on smaller companies and companies with lower book-to-market ratios.
 
+
+
 ```{r}
 optimal_weights <- compute_portfolio_weights(
     theta = opt_theta,
@@ -287,6 +288,46 @@ optimal_weights <- compute_portfolio_weights(
 
 optimal_weights %>% pivot_wider(names_from = permno, values_from = weight_tilt) %>% kbl(caption = "Table 6: Optimal weights in the last period based on theta and stock characteristics", digits = 3) %>%
   kable_classic(full_width = F, html_font = "Cambria")
+
+naive = 
+
+```
+
+### 3.1
+
+```{r}
+##3.
+*Compare the performance of the two portfolio weight vectors from Exercise 1 and Exercise 2 with the naive allocation and the efficient portfolio*
+
+#Weights for efficient portfolio
+retmatrix_eff <- data %>% select(month, permno, ret_excess) %>% pivot_wider(
+    names_from = permno,
+    values_from = ret_excess
+  ) %>% ungroup() %>% select(-month)
+
+mu_eff <- colMeans(retmatrix_eff)
+sigma_eff <- cov(retmatrix_eff)
+
+weights_eff <- efficient_weights(mu_eff, sigma_eff)
+
+#Weights from ex 2 and naive pf's
+weights_all <- optimal_weights %>% mutate(weights_naive = 1/8)
+
+#appending weights from ex1
+w_efficient = as.data.frame(w_efficient)
+weights_all = cbind(weights_all, w_efficient)
+
+#appending weights from efficient portfolio
+weights_eff <- as.data.frame(weights_eff)
+weights_all = cbind(weights_all, weights_eff)
+
+
+#Creating table with all weights
+weights_all <- weights_all[, c(1, 4, 2, 3, 5)]
+colnames(weights_all) <- c('Permno','Exercise_1', 'Exercise_2', 'Naive', 'Efficient')
+weights_all %>% kbl(caption = "Table 7: Weights from the 4 portfolios", digits = 4) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
 
 ```
 
