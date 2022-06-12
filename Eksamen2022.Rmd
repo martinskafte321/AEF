@@ -101,7 +101,7 @@ for (m in 1:nrow(unique(data['permno']))) {
 
 # using the returns matrix, we can compute the covariance matrix and sample mean
 sigma <- linearShrinkLWEst(ret_matrix)
-mu <- colMeans(ret_matrix2)
+mu <- colMeans(ret_matrix)
 
 ```
 
@@ -130,13 +130,14 @@ In our model, all predictors (market excess, smb and hml returns) have the same 
 
 ### 1.3
 **Use your parameter estimates to report the computed implied mean-variance efficient portfolio weight for an investor with risk aversion $\gamma$ = 4**
+As visible in table 4, we end up with weights that indicate an extremely aggressive trading strategy. This is most visible by the long position of 1180% in permno 10044 and the short position of 821% in permno 10104. As our weights sum to 1, i.e. 100%, we accept the weights, however, we want to note that we do not necessarily deem it a realistic strategy. 
 ```{r}
 # Function to compute optimal portfolio weights:
 efficient_weights <- function(mu, sigma, gamma = 4) {
   
   iota <- rep(1, ncol(sigma))
  
-  sigma_inv <- solve(sigma)
+  sigma_inv <- solve(sigma) #Using Ledoit Wolf shrinkage, we can invert the matrix
   
   w_mvp <- sigma_inv %*% iota
   w_mvp <- as.vector(w_mvp / sum(w_mvp))
@@ -150,7 +151,18 @@ w_efficient = efficient_weights(sigma = sigma,
                                    mu = mu
                                 )
 
+#Prepping table ensuring that the weights sum to 1 (100%)
+w_efficient_tbl <- as.data.frame(w_efficient)
+w_efficient_tbl['Permno'] <- c('10026', '10032', '10044', '10104', '10200', '10232', '10252', '10397')
+w_efficient_tbl <- w_efficient_tbl[ , c("Permno",    # Reorder data frame
+                       names(w_efficient_tbl)[names(w_efficient_tbl) != "Permno"])]
+w_efficient_tbl[nrow(w_efficient_tbl) + 1,] = c("SUM",sum(w_efficient))
+
+w_efficient_tbl %>% kbl(caption = "Table 4: Weights assigned to stocks based on the model implied excess returns",digits = 4) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
 ```
+
 ### 2.1
 
 **Briefly describe the method: What is the intuition behind the parameter vector $\theta$ and how do Brandt, Santa-Clara and Valkanov propose to estimate $\theta$?**
@@ -258,7 +270,7 @@ optimal_theta <- optim(
 
 opt_theta <- optimal_theta$par
 
-t(opt_theta) %>% kbl(caption = "Table 4: Optimal estimates of theta", digits = 3, col.names = c('Size', 'bm', 'beta')) %>%
+t(opt_theta) %>% kbl(caption = "Table 5: Optimal estimates of theta", digits = 3, col.names = c('Size', 'bm', 'beta')) %>%
   kable_classic(full_width = F, html_font = "Cambria")
 
 
@@ -272,7 +284,7 @@ optimal_weights <- compute_portfolio_weights(
     data = data
   ) %>% group_by(permno) %>% filter(month == max(month)) %>% select(weight_tilt) 
 
-optimal_weights %>% pivot_wider(names_from = permno, values_from = weight_tilt) %>% kbl(caption = "Table 5: Optimal weights in the last period based on theta and stock characteristics", digits = 3) %>%
+optimal_weights %>% pivot_wider(names_from = permno, values_from = weight_tilt) %>% kbl(caption = "Table 6: Optimal weights in the last period based on theta and stock characteristics", digits = 3) %>%
   kable_classic(full_width = F, html_font = "Cambria")
 
 ```
